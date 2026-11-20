@@ -24,7 +24,7 @@ from apps.inventory.models import (Product, PurchaseOrder, PurchaseOrderItem, Re
                                     RecipeIngredient, Stock, StockMovement, Supplier)
 from apps.inventory.services import move_stock
 from apps.restaurant.models import Menu, MenuItem, Order, OrderItem, RestaurantReservation, Table
-from apps.workspaces.services import find_bar_invoice, find_order_invoice, register_payment
+from apps.workspaces.services import find_bar_invoice, find_order_invoice, find_reservation_invoice, register_payment
 from apps.workspaces.views import workspace_home as _workspace_home
 from apps.core.models import AuditLog, Customer
 
@@ -478,7 +478,7 @@ def _hotel_overview(today):
     components = ['Types de chambre', 'Chambres', 'Tarifs', 'Réservations', 'Séjours', 'Housekeeping']
     quick_actions = [
         {'label': 'Nouvelle réservation', 'meta': 'Créer une demande', 'icon': 'reservations',
-         'url': _create_url('hotel', 'reservation')},
+         'url': reverse('workspaces:reservation_create')},
         {'label': 'Voir les données', 'meta': 'Toutes les réservations', 'icon': 'reservations',
          'url': _list_url('hotel', 'reservation')},
     ]
@@ -818,7 +818,7 @@ def module_home(request, module):
         quick_actions = [action for action in quick_actions if action['url'] != order_card['create_url']]
         order_card['create_url'] = ''
     for card in cards:
-        if card['name'] == 'AuditLog':
+        if card['name'] in {'AuditLog', 'Stay', 'Reservation'}:
             card['create_url'] = ''
     return render(request, 'module_home.html', {
         'module': module,
@@ -840,7 +840,7 @@ def module_home(request, module):
 
 ORDER_EDITORS = {Order: 'service', BarOrder: 'bar'}
 POSTED_RECORDS = {Payment, StockMovement, Stock}
-NO_CREATE_MODELS = {AuditLog, BookingRequest}
+NO_CREATE_MODELS = {AuditLog, BookingRequest, Stay}
 READ_ONLY_MODELS = {AuditLog, BookingRequest}
 POSTING_TITLES = {Payment: 'Encaisser un paiement', StockMovement: 'Enregistrer un mouvement de stock'}
 CHILD_LINE_MODELS = {
@@ -937,7 +937,7 @@ def entity_list(request, module, entity):
         'posting_title': POSTING_TITLES.get(model),
         'stock_balance': model is Stock,
         'can_compose_order': model in ORDER_EDITORS and _can_compose_order(request.user, model),
-        'can_create': model not in NO_CREATE_MODELS and (model not in ORDER_EDITORS or _can_compose_order(request.user, model)),
+        'can_create': model not in NO_CREATE_MODELS and model is not Reservation and (model not in ORDER_EDITORS or _can_compose_order(request.user, model)),
         'printable_document': 'invoice' if model is Invoice else ('receipt' if model is Payment else ''),
         'order_print_kind': order_print_kind,
         'modules': MODULES,
@@ -1029,6 +1029,7 @@ def entity_detail(request, module, entity, pk):
         }
     elif isinstance(obj, Reservation):
         source_booking_requests = list(obj.source_booking_requests.select_related('room_type').order_by('-created_at'))
+        reservation_actions = _reservation_actions(request, obj)
     if isinstance(obj, Payment):
         related_invoice = obj.invoice
     return render(request, 'entity_detail.html', {
@@ -1050,8 +1051,30 @@ def entity_detail(request, module, entity, pk):
         'detail_lines': detail_lines,
         'booking_actions': booking_actions,
         'source_booking_requests': source_booking_requests,
+        'reservation_actions': locals().get('reservation_actions'),
         'modules': MODULES,
     })
+
+
+def _reservation_actions(request, reservation):
+    roles = set(user_roles(request.user))
+    can_manage = request.user.is_superuser or bool({'Receptionist', 'Owner'} & roles)
+    can_collect = request.user.is_superuser or bool({'Cashier', 'Owner'} & roles)
+    invoice = find_reservation_invoice(reservation)
+    stay = Stay.objects.filter(reservation=reservation).order_by('-actual_check_in', '-pk').first()
+    has_unpaid = bool(invoice and invoice.balance > 0)
+    return {
+        'can_manage': can_manage,
+        'can_collect': can_collect,
+        'invoice': invoice,
+        'stay': stay,
+        'editable': reservation.status in ('DRAFT', 'CONFIRMED'),
+        'can_check_in': reservation.status == 'CONFIRMED',
+        'can_prepare_checkout': reservation.status == 'CHECKED_IN' and (invoice is None or has_unpaid),
+        'can_collect_payment': reservation.status == 'CHECKED_IN' and has_unpaid and can_collect,
+        'can_check_out': reservation.status == 'CHECKED_IN' and invoice is not None and not has_unpaid,
+        'can_cancel': reservation.status in ('DRAFT', 'CONFIRMED'),
+    }
 
 
 @login_required
@@ -1066,6 +1089,13 @@ def entity_create(request, module, entity):
         return redirect('entity_list', module, entity)
     if model is Stock:
         return redirect('entity_create', module, 'stockmovement')
+    if model is Reservation:
+        if not (request.user.is_superuser or bool({'Receptionist', 'Owner'} & set(user_roles(request.user)))):
+            raise PermissionDenied
+        url = reverse('workspaces:reservation_create')
+        if 'room' in request.GET:
+            url += '?' + urlencode({'room': request.GET['room']})
+        return redirect(url)
     if model in ORDER_EDITORS:
         if not _can_compose_order(request.user, model):
             raise PermissionDenied

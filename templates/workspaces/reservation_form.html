@@ -65,12 +65,33 @@
     </div>
 </form>
 
-{% if form.errors %}
+{{ form.room_rates_json|json_script:"room-rates-data" }}
 <script>
 (function () {
     var banner = document.getElementById("form-error-summary");
     if (banner) { banner.scrollIntoView({ block: "center" }); banner.focus(); }
+    var ratesEl = document.getElementById("room-rates-data");
+    var rates = ratesEl ? JSON.parse(ratesEl.textContent || "{}") : {};
+    var room = document.querySelector('[data-room-select="1"]');
+    var checkIn = document.querySelector('[data-stay-date="checkin"]');
+    var checkOut = document.querySelector('[data-stay-date="checkout"]');
+    var total = document.querySelector('[data-estimated-total="1"]');
+    if (!room || !checkIn || !checkOut || !total) return;
+    var manual = false;
+    total.addEventListener('input', function(){ manual = true; });
+    function calc(){
+        if (manual && total.value && total.value !== '0' && total.value !== '0.00') return;
+        var rate = rates[room.value];
+        if (!rate || !checkIn.value || !checkOut.value) return;
+        var a = new Date(checkIn.value), b = new Date(checkOut.value);
+        if (!(b > a)) return;
+        var nights = Math.round((b - a) / 86400000);
+        if (nights <= 0) return;
+        var amount = (parseFloat(rate) * nights);
+        if (!isNaN(amount)) total.value = amount.toFixed(2).replace(/\.00$/, '');
+    }
+    [room, checkIn, checkOut].forEach(function(el){ el.addEventListener('change', function(){ manual = false; calc(); }); });
+    if (!total.value || total.value === '0' || total.value === '0.00') calc();
 })();
 </script>
-{% endif %}
 {% endblock %}

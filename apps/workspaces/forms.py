@@ -1,9 +1,13 @@
+from decimal import Decimal
+import json
+
 from django import forms
+from django.db.models import Q
 
 from apps.bar.models import BarTable
 from apps.core.models import Customer
 from apps.finance.models import PaymentMethod
-from apps.hotel.models import Reservation, Room
+from apps.hotel.models import Reservation, Room, RoomRate
 from apps.inventory.models import Product
 from apps.restaurant.models import Order, Table
 
@@ -56,6 +60,38 @@ class ReservationForm(forms.ModelForm):
 
     customer_fields = ('first_name', 'last_name', 'phone', 'email', 'identity_number', 'nationality')
 
+    def _suggested_total(self, room, check_in, check_out):
+        if not (room and check_in and check_out):
+            return None
+        try:
+            nights = (check_out - check_in).days
+        except Exception:
+            return None
+        if nights <= 0:
+            return None
+        rate = (RoomRate.objects.filter(
+            room_type_id=room.room_type_id, active=True, start_date__lte=check_in,
+        ).filter(Q(end_date__isnull=True) | Q(end_date__gte=check_in))
+            .order_by('-start_date', '-pk').values_list('price', flat=True).first())
+        if rate is None:
+            rate = (RoomRate.objects.filter(room_type_id=room.room_type_id, active=True)
+                    .order_by('-start_date', '-pk').values_list('price', flat=True).first())
+        if rate is None:
+            return None
+        return (rate * nights).quantize(Decimal('0.01'))
+
+    def _build_room_rates(self):
+        rates = {}
+        qs = self.fields['room'].queryset.select_related('room_type')
+        type_ids = [r.room_type_id for r in qs]
+        latest = {}
+        for rr in RoomRate.objects.filter(room_type_id__in=type_ids, active=True).order_by('room_type_id', '-start_date', '-pk'):
+            latest.setdefault(rr.room_type_id, rr.price)
+        for room in qs:
+            price = latest.get(room.room_type_id)
+            rates[str(room.pk)] = str(price) if price is not None else ''
+        return rates
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['customer'].queryset = Customer.objects.filter(is_walk_in=False)
@@ -63,6 +99,9 @@ class ReservationForm(forms.ModelForm):
             ('DRAFT', 'Brouillon'),
             ('CONFIRMED', 'Confirmée'),
         ]
+        self.fields['estimated_total'].required = False
+        self.fields['estimated_total'].help_text = 'Calculé automatiquement selon la chambre et les nuits (modifiable selon la situation).'
+        self.fields['estimated_total'].widget.attrs['data-estimated-total'] = '1'
 
         if self.is_bound:
             data = self.data.copy()
@@ -87,6 +126,9 @@ class ReservationForm(forms.ModelForm):
         else:
             self.initial.setdefault('customer_mode', 'existing' if (self.initial.get('customer') or getattr(self.instance, 'customer_id', None)) else 'existing')
 
+        self.fields['room'].widget.attrs['data-room-select'] = '1'
+        self.fields['check_in'].widget.attrs['data-stay-date'] = 'checkin'
+        self.fields['check_out'].widget.attrs['data-stay-date'] = 'checkout'
         for name, field in self.fields.items():
             if isinstance(field.widget, forms.RadioSelect):
                 continue
@@ -96,6 +138,7 @@ class ReservationForm(forms.ModelForm):
                 _style(field, 'textarea-input')
             else:
                 _style(field, 'text-input')
+        self.room_rates_json = json.dumps(self._build_room_rates())
 
     def clean(self):
         cleaned = super().clean()
@@ -111,6 +154,16 @@ class ReservationForm(forms.ModelForm):
             for name in ('first_name', 'last_name'):
                 if not cleaned.get(name) and name not in self.errors:
                     self.add_error(name, 'Renseignez ce champ pour créer le client.')
+        room = cleaned.get('room') or getattr(self.instance, 'room', None)
+        check_in = cleaned.get('check_in') or getattr(self.instance, 'check_in', None)
+        check_out = cleaned.get('check_out') or getattr(self.instance, 'check_out', None)
+        total = cleaned.get('estimated_total')
+        if total in (None, '', Decimal('0'), Decimal('0.00'), 0):
+            suggested = self._suggested_total(room, check_in, check_out)
+            if suggested is not None:
+                cleaned['estimated_total'] = suggested
+        if cleaned.get('estimated_total') in (None, ''):
+            cleaned['estimated_total'] = Decimal('0')
         return cleaned
 
     def save(self, commit=True):

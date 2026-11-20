@@ -709,6 +709,25 @@ def reservation_check_out(request, pk):
 
 
 @role_required('Receptionist', 'Owner')
+def reservation_cancel(request, pk):
+    reservation = get_object_or_404(Reservation, pk=pk)
+    if request.method != 'POST':
+        return redirect('entity_detail', 'hotel', 'reservation', reservation.pk)
+    if reservation.status not in ('DRAFT', 'CONFIRMED'):
+        messages.error(request, 'Seule une réservation en brouillon ou confirmée peut être annulée.')
+        return redirect('entity_detail', 'hotel', 'reservation', reservation.pk)
+    reservation.status = 'CANCELLED'
+    reservation.save(update_fields=['status'])
+    log_action(
+        request.user, 'Réservation annulée', reservation,
+        details={'customer': str(reservation.customer), 'room': str(reservation.room)},
+    )
+    messages.success(request, 'Réservation annulée.')
+    next_url = request.POST.get('next') or request.META.get('HTTP_REFERER') or reverse('entity_detail', args=['hotel', 'reservation', reservation.pk])
+    return redirect(next_url)
+
+
+@role_required('Receptionist', 'Owner')
 def housekeeping_status(request, pk):
     task = get_object_or_404(HousekeepingTask, pk=pk)
     if request.method != 'POST':
@@ -1263,8 +1282,10 @@ def reception_room_detail(request, pk):
         reservation.invoice = find_reservation_invoice(reservation)
 
     active_stay = (
-        Stay.objects.select_related('reservation', 'reservation__customer', 'responsible_receptionist')
-        .filter(room=room, status='ACTIVE')
+        Stay.objects.select_related(
+            'reservation', 'reservation__customer', 'reservation__room', 'responsible_receptionist',
+        )
+        .filter(reservation__room=room, status='ACTIVE')
         .order_by('-actual_check_in', '-pk')
         .first()
     )

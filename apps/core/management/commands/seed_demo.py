@@ -541,7 +541,6 @@ class Command(BaseCommand):
             Stay.objects.get_or_create(
                 reservation=checked_in,
                 defaults={
-                    'room': checked_in.room,
                     'actual_check_in': timezone.now(),
                     'status': 'ACTIVE',
                     'responsible_receptionist': user,

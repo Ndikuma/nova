@@ -122,7 +122,53 @@
         {% endif %}
     </article>
 
-    {% if not posted_record and not read_only_record %}<aside class="detail-side-stack">
+    {% if reservation_actions %}<aside class="detail-side-stack">
+        <article class="card">
+            <div class="detail-section-head"><h3>Actions de réservation</h3>
+                <p>{{ object.get_status_display }}</p>
+            </div>
+            <div class="record-actions" style="flex-wrap:wrap;gap:8px">
+                <a class="button button-light" href="{% url 'workspaces:reception' %}">Réception</a>
+                <a class="button button-light" href="{% url 'workspaces:reception_room_detail' object.room_id %}">Fiche chambre</a>
+                {% if reservation_actions.invoice %}
+                <a class="button button-light" href="{% url 'entity_detail' 'finance' 'invoice' reservation_actions.invoice.pk %}">Facture {{ reservation_actions.invoice.number }}</a>
+                {% endif %}
+                {% if reservation_actions.stay %}
+                <a class="button button-light" href="{% url 'entity_detail' 'hotel' 'stay' reservation_actions.stay.pk %}">Voir le séjour</a>
+                {% endif %}
+                {% if reservation_actions.can_manage and reservation_actions.editable %}
+                <a class="button" href="{% url 'workspaces:reservation_edit' object.pk %}">Modifier</a>
+                {% endif %}
+                {% if reservation_actions.can_manage and reservation_actions.can_check_in %}
+                <form method="post" action="{% url 'workspaces:reservation_check_in' object.pk %}" style="margin:0">{% csrf_token %}<button class="button" type="submit">Check-in (créer le séjour)</button></form>
+                {% endif %}
+                {% if reservation_actions.can_manage and reservation_actions.can_prepare_checkout %}
+                <form method="post" action="{% url 'workspaces:reservation_prepare_checkout' object.pk %}" style="margin:0">{% csrf_token %}<button class="button button-light" type="submit">{% if reservation_actions.invoice %}Actualiser facture{% else %}Préparer facture départ{% endif %}</button></form>
+                {% endif %}
+                {% if reservation_actions.can_collect_payment %}
+                <a class="button" href="{% url 'workspaces:payment_create' reservation_actions.invoice.pk %}">Encaisser le solde ({{ reservation_actions.invoice.balance|money }})</a>
+                {% endif %}
+                {% if reservation_actions.can_manage and reservation_actions.can_check_out %}
+                <form method="post" action="{% url 'workspaces:reservation_check_out' object.pk %}" style="margin:0">{% csrf_token %}<button class="button" type="submit">Check-out (clôturer)</button></form>
+                {% endif %}
+                {% if reservation_actions.can_manage and reservation_actions.can_cancel %}
+                <form method="post" action="{% url 'workspaces:reservation_cancel' object.pk %}" style="margin:0" onsubmit="return confirm('Annuler cette réservation ?');">{% csrf_token %}<button class="button danger-button" type="submit">Annuler la réservation</button></form>
+                {% endif %}
+            </div>
+            <p class="muted" style="margin-top:10px;font-size:12px">Le séjour est créé automatiquement au check-in. Le check-out n’est possible qu’après encaissement du solde.</p>
+        </article>
+        {% if reservation_actions.invoice %}
+        <article class="card">
+            <div class="detail-section-head"><h3>Facture de séjour</h3><p>{{ reservation_actions.invoice.get_status_display }}</p></div>
+            <div class="invoice-summary">
+                <div><span>Numéro</span><strong>{{ reservation_actions.invoice.number }}</strong></div>
+                <div><span>Total</span><strong>{{ reservation_actions.invoice.total_amount|money }}</strong></div>
+                <div><span>Payé</span><strong>{{ reservation_actions.invoice.paid_amount|money }}</strong></div>
+                <div><span>Solde</span><strong>{{ reservation_actions.invoice.balance|money }}</strong></div>
+            </div>
+        </article>
+        {% endif %}
+    </aside>{% elif not posted_record and not read_only_record %}<aside class="detail-side-stack">
         <article class="card">
             <div class="detail-section-head"><h3>Actions</h3></div>
             <div class="record-actions">

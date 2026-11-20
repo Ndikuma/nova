@@ -145,14 +145,18 @@ class Stay(models.Model):
     STATUS = [('ACTIVE', 'Active'), ('COMPLETED', 'Terminée')]
 
     reservation = models.OneToOneField(Reservation, on_delete=models.PROTECT)
-    room = models.ForeignKey(Room, on_delete=models.PROTECT)
     actual_check_in = models.DateTimeField(null=True, blank=True)
     actual_check_out = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS, default='ACTIVE')
     responsible_receptionist = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
 
+    @property
+    def room(self):
+        return self.reservation.room
+
     def __str__(self):
-        return f'Séjour #{self.pk or "nouveau"} · {self.reservation.customer} · {self.room}'
+        reservation = self.reservation
+        return f'Séjour #{self.pk or "nouveau"} · {reservation.customer} · {reservation.room}'
 
 
 class HousekeepingTask(models.Model):

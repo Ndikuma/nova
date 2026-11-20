@@ -21,6 +21,8 @@ urlpatterns = [
          name='reservation_prepare_checkout'),
     path('reception/reservations/<int:pk>/check-out/', views.reservation_check_out,
          name='reservation_check_out'),
+    path('reception/reservations/<int:pk>/cancel/', views.reservation_cancel,
+         name='reservation_cancel'),
     path('reception/housekeeping/<int:pk>/status/', views.housekeeping_status,
          name='housekeeping_status'),
 

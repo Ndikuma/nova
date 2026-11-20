@@ -262,7 +262,6 @@ def check_in_reservation(reservation, user):
     stay, created = Stay.objects.get_or_create(
         reservation=reservation,
         defaults={
-            'room': reservation.room,
             'actual_check_in': timezone.now(),
             'status': 'ACTIVE',
             'responsible_receptionist': user,
