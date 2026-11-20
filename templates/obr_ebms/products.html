@@ -1,0 +1,64 @@
+{% extends 'base.html' %}{% load ui %}
+{% block title %}Classification eBMS des produits{% endblock %}
+{% block content %}
+<section class="page-head">
+    <div>
+        <div class="breadcrumbs"><a href="/">Accueil</a> / <a href="{% url 'obr_ebms:dashboard' %}">OBR eBMS</a> / Produits</div>
+        <span class="eyebrow">Classification fiscale</span>
+        <h2>Produits &amp; codes articles</h2>
+        <p>Chaque produit actif doit être associé à un code article et une unité de mesure OBR.</p>
+    </div>
+</section>
+
+<form method="get" class="card" style="padding:14px;margin-bottom:16px;display:flex;gap:10px;flex-wrap:wrap;align-items:end">
+    <label class="field-group" style="flex:1 1 260px">
+        <span class="field-label">Rechercher</span>
+        <input class="text-input" type="search" name="q" value="{{ query }}" placeholder="Nom ou référence du produit">
+    </label>
+    <label class="field-group" style="flex:0 1 220px">
+        <span class="field-label">Éligibilité</span>
+        <select class="select-input" name="eligibility">
+            <option value="">Toutes</option>
+            {% for value, label in eligibility_choices %}
+            <option value="{{ value }}" {% if eligibility == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <button class="button" type="submit">Filtrer</button>
+    <a class="button button-light" href="{% url 'obr_ebms:products' %}">Réinitialiser</a>
+</form>
+
+<section class="card table-card">
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr><th>Produit</th><th>Référence</th><th>Catégorie</th><th>Éligibilité</th><th>Code article</th><th>Unité</th><th>TVA</th><th></th></tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                <tr>
+                    <td>{{ row.product.name }}</td>
+                    <td>{{ row.product.sku }}</td>
+                    <td>{{ row.product.category|default:"—" }}</td>
+                    <td>
+                        {% if row.mapping %}
+                        <span class="status-badge {% if row.mapping.eligibility == 'required' %}status-success{% elif row.mapping.eligibility == 'excluded' %}status-neutral{% else %}status-warning{% endif %}">
+                            {{ row.mapping.get_eligibility_display }}
+                        </span>
+                        {% else %}
+                        <span class="status-badge status-warning">À classifier</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ row.mapping.item_code|default:"—" }}</td>
+                    <td>{{ row.mapping.measurement_unit|default:"—" }}</td>
+                    <td>{{ row.mapping.vat_rate|default:"—" }} %</td>
+                    <td><a class="button button-light button-small" href="{% url 'obr_ebms:product_mapping' row.product.pk %}">Classer</a></td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="8" class="empty-state">Aucun produit ne correspond à la recherche.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

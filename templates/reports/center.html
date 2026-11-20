@@ -1,0 +1,123 @@
+{% extends 'base.html' %}{% load ui %}
+{% block title %}Rapports & documents{% endblock %}
+{% block content %}
+<section class="hero module-hero">
+    <div>
+        <div class="breadcrumbs" style="margin-bottom:8px"><a href="/">Accueil</a> / Rapports</div>
+        <span class="eyebrow">Analyse & documents</span>
+        <h2>Rapports & documents</h2>
+        <p class="muted">Générez les états opérationnels et financiers, exportez-les en CSV ou PDF et imprimez factures et reçus.</p>
+    </div>
+    <div class="hero-side">
+        <div class="workspace-kpis workspace-kpis-pair">
+            <article class="workspace-kpi tone-blue">
+                <small>Rapports disponibles</small>
+                <strong>{{ report_groups|length }}</strong>
+                <p>familles d’états</p>
+            </article>
+            <article class="workspace-kpi tone-green">
+                <small>Générations récentes</small>
+                <strong>{{ history|length }}</strong>
+                <p>documents conservés</p>
+            </article>
+        </div>
+    </div>
+</section>
+
+<section class="card" style="padding:20px;margin-bottom:20px">
+    <div class="workspace-panel-head" style="padding:0 0 14px;border:0">
+        <span class="eyebrow">Génération</span>
+        <h3>Créer un rapport</h3>
+        <p>Sélectionnez un état, la période puis le format de sortie.</p>
+    </div>
+    <form method="post" action="/reports/generate/" class="form-grid">
+        {% csrf_token %}
+        <label class="field-group">
+            <span class="field-label">Rapport</span>
+            <select class="select-input" name="report_code" required>
+                {% for category, entries in report_groups %}
+                <optgroup label="{{ category }}">
+                    {% for code, entry in entries %}
+                    <option value="{{ code }}">{{ entry.name }}</option>
+                    {% endfor %}
+                </optgroup>
+                {% endfor %}
+            </select>
+        </label>
+        <label class="field-group">
+            <span class="field-label">Du</span>
+            <input class="text-input" type="date" name="date_from" value="{{ default_date_from }}" required>
+        </label>
+        <label class="field-group">
+            <span class="field-label">Au</span>
+            <input class="text-input" type="date" name="date_to" value="{{ default_date_to }}" required>
+        </label>
+        <label class="field-group">
+            <span class="field-label">Format</span>
+            <select class="select-input" name="file_format">
+                <option value="pdf">PDF</option>
+                <option value="csv">CSV (Excel)</option>
+            </select>
+        </label>
+        <div class="form-actions" style="align-self:end">
+            <button class="button" type="submit">Générer</button>
+        </div>
+    </form>
+</section>
+
+{% for category, entries in report_groups %}
+<section class="card" style="padding:18px;margin-bottom:16px">
+    <div class="workspace-panel-head" style="padding:0 0 12px;border:0">
+        <span class="eyebrow">{{ category }}</span>
+        <h3>États {{ category|lower }}</h3>
+    </div>
+    <div class="grid">
+        {% for code, entry in entries %}
+        <article class="card module-card">
+            <span class="module-icon">{% include "partials/sidebar_icon.html" with icon_name="reports" %}</span>
+            <strong>{{ entry.name }}</strong>
+            <span>{{ entry.description }}</span>
+            <div class="module-card-actions">
+                <a class="button button-small" href="/reports/preview/{{ code }}/?date_from={{ default_date_from }}&date_to={{ default_date_to }}" target="_blank" rel="noopener">Aperçu</a>
+                <a class="button button-light button-small" href="/reports/preview/{{ code }}/pdf/?date_from={{ default_date_from }}&date_to={{ default_date_to }}">PDF</a>
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+</section>
+{% endfor %}
+
+<section class="card" style="padding:18px">
+    <div class="workspace-panel-head" style="padding:0 0 12px;border:0">
+        <span class="eyebrow">Historique</span>
+        <h3>Documents générés</h3>
+        <p>Les fichiers sont conservés et téléchargeables par leur auteur.</p>
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr><th>Rapport</th><th>Période</th><th>Format</th><th>Lignes</th><th>Statut</th><th>Créé le</th><th></th></tr>
+            </thead>
+            <tbody>
+                {% for run in history %}
+                <tr>
+                    <td>{{ run.report_name }}</td>
+                    <td>{{ run.parameters.date_from|default:"—" }} → {{ run.parameters.date_to|default:"—" }}</td>
+                    <td>{{ run.file_format|upper }}</td>
+                    <td>{{ run.row_count }}</td>
+                    <td><span class="{{ run.status|badge_class }}">{{ run.get_status_display }}</span></td>
+                    <td>{{ run.created_at|date:"d/m/Y H:i" }}</td>
+                    <td>
+                        {% if run.status == 'completed' and run.file and run.created_by_id == request.user.pk or request.user.is_superuser and run.status == 'completed' and run.file %}
+                        <a class="button button-small" href="/reports/{{ run.pk }}/download/">Télécharger</a>
+                        {% else %}—{% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="7" class="empty-state">Aucun rapport généré pour le moment.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

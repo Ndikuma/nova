@@ -1,0 +1,162 @@
+{% load ui %}<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Document{% endblock %} · {{ brand.name }}</title>
+    <style>
+        :root {
+            --ink: {{ brand.ink_color }};
+            --muted: {{ brand.muted_color }};
+            --line: {{ brand.border_color }};
+            --accent: {{ brand.primary_color }};
+            --soft: {{ brand.soft_color }};
+            --paper: {{ brand.paper_color }};
+            --sheet-bg: {{ brand.print_bg_color }};
+            --page: {{ brand.page_color }};
+            --on-brand: {{ brand.on_brand_color }};
+        }
+        * { box-sizing: border-box; }
+        body { margin: 0; background: var(--sheet-bg); color: var(--ink); font-family: "Inter", "Segoe UI", Arial, sans-serif; font-size: 13px; line-height: 1.5; }
+        .toolbar { position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 22px; background: var(--paper); border-bottom: 1px solid var(--line); }
+        .toolbar-title { font-weight: 700; }
+        .toolbar-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+        .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); text-decoration: none; font-weight: 600; font-size: 12.5px; cursor: pointer; }
+        .btn-primary { background: var(--accent); border-color: var(--accent); color: var(--on-brand); }
+        .sheet { width: 210mm; min-height: 297mm; margin: 22px auto; padding: 18mm 16mm; background: var(--paper); box-shadow: 0 12px 40px rgba(15,23,42,.12); }
+        .doc-head { display: flex; justify-content: space-between; gap: 24px; padding-bottom: 14px; border-bottom: 2px solid var(--ink); }
+        .doc-brand { display: flex; gap: 12px; align-items: flex-start; }
+        .doc-mark { width: 46px; height: 46px; border-radius: 12px; background: var(--accent); color: var(--on-brand); display: grid; place-items: center; font-weight: 800; font-size: 20px; overflow: hidden; }
+        .doc-mark img { width: 100%; height: 100%; object-fit: cover; }
+        .doc-brand strong { display: block; font-size: 18px; letter-spacing: .02em; }
+        .doc-brand span, .doc-brand small { display: block; color: var(--muted); font-size: 11.5px; }
+        .doc-meta { text-align: right; }
+        .doc-meta h1 { margin: 0 0 4px; font-size: 20px; letter-spacing: .06em; }
+        .doc-meta span { display: block; color: var(--muted); font-size: 11.5px; }
+        .doc-info { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; padding: 16px 0; }
+        .doc-info > div { border-left: 3px solid var(--accent); padding-left: 10px; }
+        .doc-info span { display: block; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .06em; }
+        .doc-info strong { display: block; font-size: 13px; margin-top: 2px; }
+        .doc-info small { display: block; color: var(--muted); font-size: 11.5px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 8px 9px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+        thead th { background: var(--accent); color: var(--on-brand); font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; }
+        tbody tr:nth-child(even) { background: var(--soft); }
+        .num { text-align: right; font-variant-numeric: tabular-nums; }
+        .empty { text-align: center; color: var(--muted); padding: 22px; }
+        .doc-totals { width: 52%; margin-left: auto; padding-top: 12px; }
+        .doc-totals div { display: flex; justify-content: space-between; gap: 20px; padding: 4px 0; }
+        .doc-totals span { color: var(--muted); }
+        .doc-totals .grand { border-top: 1px solid var(--ink); margin-top: 4px; padding-top: 8px; font-size: 15px; font-weight: 700; }
+        .doc-foot { margin-top: 26px; padding-top: 12px; border-top: 1px dashed var(--line); color: var(--muted); font-size: 10.5px; }
+        .doc-foot p { margin: 0 0 4px; }
+        .signatures { display: grid; grid-template-columns: repeat(2, 1fr); gap: 30px; margin-top: 28px; }
+        .signature { border-top: 1px solid var(--line); padding-top: 6px; color: var(--muted); font-size: 11px; }
+        .status { display: inline-block; padding: 2px 8px; border-radius: 999px; background: var(--soft); border: 1px solid var(--line); font-size: 10.5px; font-weight: 600; }
+        .pos-hint { display: none; }
+        .toolbar-label { margin-left: 4px; }
+        .toolbar-group { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        body.pos-mode { background: var(--sheet-bg); }
+        body.pos-mode .sheet { width: 80mm; min-height: 0; margin: 12px auto; padding: 6mm 4mm; font-size: 11px; line-height: 1.35; box-shadow: 0 8px 20px rgba(15,23,42,.12); }
+        body.pos-mode .doc-head { flex-direction: column; gap: 6px; padding-bottom: 8px; border-bottom: 1px dashed var(--line); }
+        body.pos-mode .doc-brand { gap: 8px; }
+        body.pos-mode .doc-mark { width: 30px; height: 30px; border-radius: 8px; font-size: 14px; }
+        body.pos-mode .doc-brand strong { font-size: 13px; }
+        body.pos-mode .doc-brand span, body.pos-mode .doc-brand small { font-size: 9.5px; }
+        body.pos-mode .doc-meta { text-align: left; }
+        body.pos-mode .doc-meta h1 { font-size: 13px; margin: 0; letter-spacing: .04em; }
+        body.pos-mode .doc-meta span { font-size: 10px; }
+        body.pos-mode .doc-info { grid-template-columns: 1fr; gap: 6px; padding: 8px 0; }
+        body.pos-mode .doc-info > div { border-left: 2px solid var(--accent); padding-left: 6px; }
+        body.pos-mode .doc-info span { font-size: 8.5px; }
+        body.pos-mode .doc-info strong { font-size: 11px; }
+        body.pos-mode .doc-info small { font-size: 10px; }
+        body.pos-mode table { font-size: 10.5px; }
+        body.pos-mode th, body.pos-mode td { padding: 4px 2px; }
+        body.pos-mode thead th { font-size: 9px; letter-spacing: .02em; }
+        body.pos-mode .doc-totals { width: 100%; padding-top: 6px; }
+        body.pos-mode .doc-totals .grand { font-size: 12px; }
+        body.pos-mode .signatures { display: none; }
+        body.pos-mode .doc-foot { margin-top: 10px; padding-top: 8px; font-size: 9.5px; text-align: center; }
+        body.pos-mode .pos-hint { display: block; color: var(--muted); font-size: 10px; text-align: center; margin-top: 4px; }
+        body.pos-mode .doc-table-wrap { overflow: visible; }
+        body.pos-mode .doc-table-wrap table { min-width: 0; }
+        @media screen and (max-width: 860px) {
+            .sheet { width: auto; min-height: 0; margin: 12px; padding: 18px; }
+            .doc-head, .doc-info { grid-template-columns: 1fr; flex-direction: column; }
+            .doc-meta { text-align: left; }
+            .doc-totals { width: 100%; }
+            .sheet { overflow-wrap: anywhere; }
+            .doc-table-wrap { max-width: 100%; overflow-x: auto; }
+            .doc-table-wrap table { min-width: 420px; }
+        }
+        @media screen and (max-width: 480px) {
+            .toolbar { padding: 10px 12px; }
+            .sheet { margin: 8px; padding: 12px; }
+            .signatures { grid-template-columns: 1fr; gap: 22px; }
+        }
+        @media print {
+            body { background: var(--paper); }
+            .toolbar { display: none !important; }
+            .sheet { width: auto; min-height: 0; margin: 0; padding: 0; box-shadow: none; }
+            thead { display: table-header-group; }
+            tr { page-break-inside: avoid; }
+            @page { size: A4; margin: 14mm; }
+            body.pos-mode .sheet { width: 80mm; padding: 0; margin: 0; box-shadow: none; font-size: 10.5px; }
+            body.pos-mode .doc-head { flex-direction: column; gap: 4px; }
+            body.pos-mode .doc-info { grid-template-columns: 1fr; gap: 4px; padding: 6px 0; }
+            body.pos-mode .doc-totals { width: 100%; }
+            body.pos-mode .signatures { display: none !important; }
+            body.pos-mode .doc-table-wrap { overflow: visible; }
+            body.pos-mode .doc-table-wrap table { min-width: 0; }
+            body.pos-mode { background: var(--paper); }
+        }
+        @page pos-receipt { size: 80mm auto; margin: 3mm; }
+    </style>
+    {% block extra_head %}{% endblock %}
+</head>
+<body{% if pos_mode %} class="pos-mode"{% endif %}>
+    <div class="toolbar">
+        <div class="toolbar-title">{% block toolbar_title %}{{ brand.name }}{% endblock %}</div>
+        <div class="toolbar-actions">
+            {% if back_url %}<a class="btn" href="{{ back_url }}">Retour</a>{% endif %}
+            <span class="toolbar-group">
+                <label class="btn toolbar-label" for="pos-mode-toggle"><input id="pos-mode-toggle" type="checkbox" {% if pos_mode %}checked{% endif %} onchange="document.body.classList.toggle('pos-mode', this.checked)"> Ticket (80 mm)</label>
+                <button class="btn btn-primary" type="button" onclick="window.print()">Imprimer</button>
+            </span>
+            {% block toolbar_actions %}{% endblock %}
+        </div>
+    </div>
+
+    <main class="sheet">
+        <header class="doc-head">
+            <div class="doc-brand">
+                <div class="doc-mark">
+                    {% if brand.logo_url %}
+                    <img src="{{ brand.logo_url }}" alt="{{ brand.name }}">
+                    {% else %}{{ brand.initials }}{% endif %}
+                </div>
+                <div>
+                    <strong>{{ brand.name }}</strong>
+                    <span>{{ brand.legal_name }}</span>
+                    <small>{{ brand.address }}</small>
+                    <small>{{ brand.contact_line }}</small>
+                    {% if brand.legal_line %}<small>{{ brand.legal_line }}</small>{% endif %}
+                    {% if brand.bank_line %}<small>{{ brand.bank_line }}</small>{% endif %}
+                </div>
+            </div>
+            <div class="doc-meta">
+                {% block doc_meta %}{% endblock %}
+            </div>
+        </header>
+
+        {% block content %}{% endblock %}
+
+        <footer class="doc-foot">
+            <p>{% block document_footer %}{{ brand.footer }}{% endblock %}</p>
+        </footer>
+    </main>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

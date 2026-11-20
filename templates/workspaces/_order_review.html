@@ -1,0 +1,25 @@
+<section class="card waiter-review" id="order-review" aria-labelledby="order-review-title" tabindex="-1">
+    <h2 id="order-review-title">Récapitulatif</h2>
+
+    <div class="waiter-review-cart" data-order-review hidden>
+        <p class="muted" data-cart-empty>Aucun article sélectionné.</p>
+        <ul class="waiter-review-lines" data-cart-lines hidden></ul>
+        <template data-cart-line>
+            <li>
+                <a data-cart-edit></a>
+                <span data-cart-price></span>
+            </li>
+        </template>
+        <div class="waiter-review-total" aria-live="polite" aria-atomic="true">
+            <span>Total</span>
+            <strong data-order-total></strong>
+        </div>
+    </div>
+
+    {% include 'workspaces/_order_customer.html' %}
+
+    <div class="waiter-order-actions">
+        <button type="submit" class="button" name="send" value="1">{% if bar_order %}Envoyer au bar{% else %}Envoyer en cuisine{% endif %}</button>
+        <button type="submit" class="button button-light">Enregistrer le brouillon</button>
+    </div>
+</section>

@@ -1,0 +1,165 @@
+{% load static ui %}<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="{{ company.theme_color }}">
+    <title>{% block title %}{{ company.name }}{% endblock %} · {{ company.short_name }}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'css/app.css' %}">
+    {% include "partials/theme_vars.html" %}
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <a class="skip-link" href="#main">Aller au contenu</a>
+    <div class="shell" id="app-shell">
+        <aside class="sidebar" id="staff-navigation" aria-label="Navigation de l’équipe">
+            <div class="sidebar-header">
+                <a class="brand-card" href="/" aria-label="{{ company.name }}">
+                    <div class="brand-mark">
+                        {% if company.logo_url %}
+                        <img src="{{ company.logo_url }}" alt="{{ company.name }}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;">
+                        {% else %}{{ company.initials }}{% endif %}
+                    </div>
+                    <div class="brand-copy">
+                        <strong>{{ company.short_name }}</strong>
+                        <span>{{ company.tagline }}</span>
+                    </div>
+                </a>
+                <button class="sidebar-toggle" type="button" id="sidebar-toggle" aria-controls="staff-navigation" aria-label="Réduire la navigation" aria-expanded="true">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg>
+                    <span class="sidebar-toggle-label">Réduire</span>
+                </button>
+            </div>
+
+            <div class="nav-section-title">Pilotage</div>
+            <nav class="nav-stack">
+                {% if workspace_entry %}
+                <a class="nav-item {% if workspace_active %}active{% endif %}" href="{{ workspace_entry.url }}">
+                    <span class="icon-pill">{% include "partials/sidebar_icon.html" with icon_name=workspace_entry.icon %}</span>
+                    <span class="nav-text">Mon espace</span>
+                </a>
+                {% endif %}
+                <a class="nav-item {% if request.path == '/' %}active{% endif %}" href="/">
+                    <span class="icon-pill">{% include "partials/sidebar_icon.html" with icon_name="dashboard" %}</span>
+                    <span class="nav-text">Vue d’ensemble</span>
+                </a>
+            </nav>
+
+            <div class="nav-section-title">Opérations</div>
+            <nav class="nav-stack">
+                {% for section in nav_sections %}
+                <details class="nav-group" data-nav-group {% if current_module == section.key %}open{% endif %}>
+                    <summary class="nav-summary {% if current_module == section.key %}active{% endif %}">
+                        <span class="icon-pill">{% include "partials/sidebar_icon.html" with icon_name=section.icon %}</span>
+                        <span class="nav-text">{{ section.label }}</span>
+                        <span class="chevron"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></span>
+                    </summary>
+                    <div class="subnav">
+                        {% for item in section.items %}
+                        <a class="subnav-item {% if request.path == item.url %}active{% endif %}" href="{{ item.url }}">
+                            <span class="icon-pill">{% include "partials/sidebar_icon.html" with icon_name=item.icon %}</span>
+                            <span>{{ item.label }}</span>
+                        </a>
+                        {% endfor %}
+                    </div>
+                </details>
+                {% endfor %}
+            </nav>
+
+            {% if can_view_reports or can_manage_ebms or obr_ebms_feature_enabled and request.user.is_superuser %}
+            <div class="nav-section-title">Rapports &amp; fiscalité</div>
+            <nav class="nav-stack">
+                {% if can_view_reports %}
+                <a class="nav-item {% if request.path|slice:':9' == '/reports/' %}active{% endif %}" href="/reports/">
+                    <span class="icon-pill">{% include "partials/sidebar_icon.html" with icon_name="reports" %}</span>
+                    <span class="nav-text">Rapports &amp; documents</span>
+                </a>
+                {% endif %}
+                {% if can_manage_ebms %}
+                <a class="nav-item {% if request.path|slice:':10' == '/obr-ebms/' %}active{% endif %}" href="/obr-ebms/">
+                    <span class="icon-pill">{% include "partials/sidebar_icon.html" with icon_name="ebms" %}</span>
+                    <span class="nav-text">OBR eBMS</span>
+                </a>
+                {% elif obr_ebms_feature_enabled and request.user.is_superuser %}
+                <span class="nav-item" aria-disabled="true" title="OBR eBMS activé — accès réservé aux rôles autorisés" style="opacity:.55;cursor:not-allowed">
+                    <span class="icon-pill">{% include "partials/sidebar_icon.html" with icon_name="ebms" %}</span>
+                    <span class="nav-text">OBR eBMS</span>
+                </span>
+                {% endif %}
+            </nav>
+            {% endif %}
+
+            <div class="nav-section-title">Système</div>
+            <nav class="nav-stack">
+                <a class="nav-item {% if request.path == '/search/' %}active{% endif %}" href="/search/">
+                    <span class="icon-pill">{% include "partials/sidebar_icon.html" with icon_name="search" %}</span>
+                    <span class="nav-text">Recherche globale</span>
+                </a>
+                {% if request.user.is_superuser %}
+                <a class="nav-item" href="/admin/">
+                    <span class="icon-pill">{% include "partials/sidebar_icon.html" with icon_name="settings" %}</span>
+                    <span class="nav-text">Administration</span>
+                </a>
+                {% endif %}
+                <form method="post" action="/logout/" class="nav-item-form">{% csrf_token %}
+                    <button class="nav-item" type="submit">
+                        <span class="icon-pill">{% include "partials/sidebar_icon.html" with icon_name="logout" %}</span>
+                        <span class="nav-text">Déconnexion</span>
+                    </button>
+                </form>
+            </nav>
+
+            <div class="sidebar-foot"><span class="status-dot"></span>Système opérationnel</div>
+        </aside>
+
+        <div class="shell-overlay" id="shell-overlay" aria-hidden="true"></div>
+
+        <main class="main">
+            <div class="content">
+                <header class="topbar">
+                    <div class="topbar-left">
+                        <button class="mobile-toggle" type="button" id="mobile-toggle" aria-controls="staff-navigation" aria-label="Ouvrir la navigation" aria-expanded="false">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"></path><path d="M3 12h18"></path><path d="M3 18h18"></path></svg>
+                            <span>Menu</span>
+                        </button>
+                        <form class="search-wrap" method="get" action="/search/" role="search">
+                            <span aria-hidden="true">⌕</span>
+                            <input type="search" name="q" value="{{ request.GET.q|default:'' }}" placeholder="Rechercher clients, chambres, factures…" aria-label="Recherche globale">
+                        </form>
+                    </div>
+                    <div class="topbar-right">
+                        <button class="top-action" type="button" data-theme-toggle aria-label="Basculer clair / sombre" title="Basculer clair / sombre">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>
+                        </button>
+                        <div class="user-chip">
+                            <span class="user-avatar">{{ request.user|initials }}</span>
+                            <span>
+                                <span>{{ request.user.get_full_name|default:request.user.username }}</span>
+                                <small class="user-role">{{ user_role }}</small>
+                            </span>
+                        </div>
+                    </div>
+                </header>
+
+                <div id="main" tabindex="-1">
+                    {% if messages %}
+                    <section class="messages">
+                        {% for message in messages %}
+                        <div class="message {{ message.tags }}">{{ message }}</div>
+                        {% endfor %}
+                    </section>
+                    {% endif %}
+
+                    {% block content %}{% endblock %}
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="{% static 'js/app.js' %}" defer></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

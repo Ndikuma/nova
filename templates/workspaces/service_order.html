@@ -1,0 +1,90 @@
+{% extends 'base.html' %}{% load l10n static ui %}
+{% block title %}{% if draft %}Commande #{{ draft.pk }}{% else %}Nouvelle commande{% endif %} · {% if bar_order %}Bar{% else %}Service en salle{% endif %}{% endblock %}
+{% block head %}<link rel="stylesheet" href="{% static 'css/service.css' %}">{% endblock %}
+{% block content %}
+<section class="page-head waiter-head">
+    <div>
+        <a href="{% url back_to_orders %}">← {% if back_to_orders == 'workspaces:service' %}Service{% elif bar_order %}Bar{% else %}Service en salle{% endif %}</a>
+        <h1>{% if draft %}Commande #{{ draft.pk }}{% elif bar_order %}Nouvelle commande bar{% else %}Nouvelle commande{% endif %}</h1>
+    </div>
+</section>
+
+<form method="post" class="waiter-order-form" data-waiter-order data-currency="{{ company.currency_symbol|default:company.currency }}">
+    {% csrf_token %}
+    {% if next_workspace %}<input type="hidden" name="next" value="{{ next_workspace }}">{% endif %}
+    {% if form.errors %}
+    <div class="message error waiter-form-errors" role="alert" tabindex="-1" data-order-errors>
+        <strong>Vérifiez les informations de la commande.</strong>
+        {{ form.non_field_errors }}
+        {% if form.table.errors or form.source.errors %}
+        <a href="#order-service">Vérifier le service</a>
+        {% endif %}
+        {% if form.customer_mode.errors or form.customer.errors or form.first_name.errors or form.last_name.errors or form.phone.errors or form.email.errors or form.notes.errors %}
+        <a href="#order-review">Vérifier les informations du client</a>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <section class="card waiter-order-options" id="order-service" aria-labelledby="order-service-title" tabindex="-1">
+        <h2 id="order-service-title">Service</h2>
+        <div class="waiter-form-grid">
+            {% if form.source %}{% include 'workspaces/_order_field.html' with field=form.source only %}{% endif %}
+            {% include 'workspaces/_order_field.html' with field=form.table only %}
+        </div>
+    </section>
+
+    <div class="waiter-order-layout">
+        <section class="waiter-menu" aria-labelledby="waiter-menu-title">
+            <div class="waiter-menu-head">
+                <h2 id="waiter-menu-title">{% if bar_order %}Choisir les boissons{% else %}Choisir les plats{% endif %}</h2>
+                {% if menu_rows %}
+                <div class="waiter-menu-tools" data-menu-tools hidden>
+                    <input type="search" class="text-input" placeholder="Rechercher un article…" aria-label="Rechercher un article" data-item-search>
+                    <button class="button button-light" type="button" aria-pressed="false" data-show-selected>Articles choisis</button>
+                </div>
+                {% endif %}
+            </div>
+            {% regroup menu_rows by category as category_groups %}
+            {% for group in category_groups %}
+            <section class="card waiter-menu-group" data-menu-group>
+                <h3>{{ group.grouper|default:"Autres" }}</h3>
+                {% for row in group.list %}
+                <div class="waiter-menu-row" id="article-{{ row.key }}" data-menu-item data-item-name="{{ row.item.name }}" data-orderable="{{ row.orderable|yesno:"true,false" }}" data-price="{{ row.price|unlocalize }}" data-search="{{ row.item.name }} {{ row.category }} {{ row.item.ingredient_names|join:' ' }}">
+                    <div class="waiter-menu-item">
+                        {% if row.item.image %}<img src="{{ row.item.image.url }}" alt="" width="48" height="48" loading="lazy">{% endif %}
+                        <div class="waiter-item-description">
+                            <strong>{{ row.item.name }}</strong>
+                            <span>{{ row.price|money }}{% if not row.orderable %} · Indisponible, retirer de la commande{% endif %}</span>
+                            {% if row.item.ingredient_names %}<small>{{ row.item.ingredient_names|join:', ' }}</small>{% endif %}
+                        </div>
+                    </div>
+                    <div class="waiter-quantity">
+                        <button type="button" class="button button-light" data-quantity-step="-1" aria-label="Retirer une unité de {{ row.item.name }}" hidden>−</button>
+                        <input class="text-input" type="number" inputmode="numeric" min="0" max="{{ row.max_quantity|unlocalize }}" aria-label="Quantité de {{ row.item.name }}" name="qty_{{ row.key }}" value="{{ row.quantity|unlocalize }}" placeholder="0" data-quantity>
+                        {% if row.orderable %}
+                        <button type="button" class="button button-light" data-quantity-step="1" aria-label="Ajouter une unité de {{ row.item.name }}" hidden>+</button>
+                        {% endif %}
+                    </div>
+                    {% if not bar_order %}<details class="waiter-line-note"{% if row.note %} open{% endif %}>
+                        <summary>{% if row.note %}Note de préparation{% else %}Ajouter une note{% endif %}</summary>
+                        <input type="text" class="text-input" name="note_{{ row.key }}" aria-label="Note pour {{ row.item.name }}" value="{{ row.note }}" placeholder="Sans sel, bien cuit…">
+                    </details>{% endif %}
+                </div>
+                {% endfor %}
+            </section>
+            {% empty %}
+            <p class="muted">Aucun article disponible.</p>
+            {% endfor %}
+            <p data-no-results role="status" hidden>Aucun article dans cette sélection.</p>
+        </section>
+
+        {% include 'workspaces/_order_review.html' %}
+    </div>
+
+    <div class="waiter-mobile-summary" data-mobile-review hidden>
+        <output data-order-summary></output>
+        <a class="button" href="#order-review">Voir la commande</a>
+    </div>
+</form>
+{% endblock %}
+{% block extra_js %}<script src="{% static 'js/service-order.js' %}" defer></script>{% endblock %}

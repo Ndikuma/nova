@@ -1,0 +1,145 @@
+{% extends 'base.html' %}{% load ui %}
+{% block title %}OBR eBMS{% endblock %}
+{% block content %}
+<section class="hero module-hero">
+    <div>
+        <div class="breadcrumbs" style="margin-bottom:8px"><a href="/">Accueil</a> / OBR eBMS</div>
+        <span class="eyebrow">Fiscalité électronique</span>
+        <h2>OBR eBMS</h2>
+        <p class="muted">Suivi des factures et mouvements de stock transmis à l’Office Burundais des Recettes.</p>
+        <div class="module-components">
+            <span class="component-chip">{{ config.get_taxpayer_type_display|default:"—" }}</span>
+            <span class="component-chip">NIF : {{ config.taxpayer_tin|default:"non configuré" }}</span>
+            <span class="component-chip">Centre : {{ config.fiscal_center }}</span>
+            <span class="component-chip"><span class="status-badge {% if company_profile.obr_ebms_enabled %}status-success{% else %}status-neutral{% endif %}">Établissement : {% if company_profile.obr_ebms_enabled %}activé{% else %}désactivé{% endif %}</span></span>
+            <span class="component-chip"><span class="status-badge {% if config.enabled %}status-success{% else %}status-warning{% endif %}">Transmission : {% if config.enabled %}activée{% else %}en pause{% endif %}</span></span>
+        </div>
+    </div>
+    <div class="hero-side">
+        <div class="workspace-head-actions" style="justify-content:flex-end">
+            <span class="status-badge {% if config.enabled %}status-success{% else %}status-neutral{% endif %}">
+                {% if config.enabled %}eBMS activé{% else %}eBMS désactivé{% endif %}
+            </span>
+            {% if can_configure %}
+            <a class="button button-light" href="{% url 'obr_ebms:configuration' %}">Configurer</a>
+            {% endif %}
+        </div>
+        {% if can_configure %}
+        <div class="workspace-head-actions" style="justify-content:flex-end;margin-top:10px">
+            <form method="post" action="{% url 'obr_ebms:connection' 'test' %}">{% csrf_token %}
+                <button class="button button-light button-small" type="submit">Tester la connexion</button>
+            </form>
+            <form method="post" action="{% url 'obr_ebms:connection' 'refresh' %}">{% csrf_token %}
+                <button class="button button-light button-small" type="submit">Rafraîchir le jeton</button>
+            </form>
+        </div>
+        {% endif %}
+    </div>
+</section>
+
+{% if not company_profile.obr_ebms_enabled %}
+<section class="alert" role="alert" style="margin-bottom:18px">
+    <strong>Module désactivé pour l’établissement.</strong>
+    <p>Le super administrateur doit activer « OBR eBMS » dans le profil de l’établissement pour autoriser l’affichage et les transmissions fiscales.</p>
+</section>
+{% elif not config.is_ready %}
+<section class="alert" role="alert" style="margin-bottom:18px">
+    <strong>Intégration incomplète.</strong>
+    <p>Le module est activé pour l’établissement, mais la configuration OBR (identifiant, mot de passe, NIF) reste à compléter.</p>
+</section>
+{% endif %}
+
+<section class="workspace-kpis">
+    <article class="workspace-kpi tone-blue">
+        <small>Factures en attente</small><strong>{{ pending_invoices }}</strong>
+        <p>à transmettre à OBR</p>
+    </article>
+    <article class="workspace-kpi tone-red">
+        <small>Factures en échec</small><strong>{{ failed_invoices }}</strong>
+        <p>nécessitent une reprise</p>
+    </article>
+    <article class="workspace-kpi tone-green">
+        <small>Produits prêts</small><strong>{{ ready_count }} / {{ products_total }}</strong>
+        <p>{{ products_to_review }} à classifier</p>
+    </article>
+    <article class="workspace-kpi tone-blue">
+        <small>Mouvements en attente</small><strong>{{ pending_stock }}</strong>
+        <p>{{ failed_stock }} en échec</p>
+    </article>
+</section>
+
+<section class="grid" style="margin-bottom:18px">
+    <article class="card module-card">
+        <span class="module-icon">{% include "partials/sidebar_icon.html" with icon_name="invoices" %}</span>
+        <strong>Factures eBMS</strong>
+        <span>Consulter les payloads, transmettre ou annuler les factures.</span>
+        <div class="module-card-actions"><a class="button button-small" href="{% url 'obr_ebms:invoices' %}">Ouvrir</a></div>
+    </article>
+    <article class="card module-card">
+        <span class="module-icon">{% include "partials/sidebar_icon.html" with icon_name="inventory" %}</span>
+        <strong>Mouvements de stock</strong>
+        <span>Suivre les entrées et sorties déclarées à OBR.</span>
+        <div class="module-card-actions"><a class="button button-small" href="{% url 'obr_ebms:stock' %}">Ouvrir</a></div>
+    </article>
+    <article class="card module-card">
+        <span class="module-icon">{% include "partials/sidebar_icon.html" with icon_name="products" %}</span>
+        <strong>Classification produits</strong>
+        <span>Associer chaque produit à un code article fiscal.</span>
+        <div class="module-card-actions"><a class="button button-small" href="{% url 'obr_ebms:products' %}">Ouvrir</a></div>
+    </article>
+    <article class="card module-card">
+        <span class="module-icon">{% include "partials/sidebar_icon.html" with icon_name="search" %}</span>
+        <strong>Vérification NIF</strong>
+        <span>Contrôler le NIF d’un client auprès d’OBR.</span>
+        <div class="module-card-actions"><a class="button button-small" href="{% url 'obr_ebms:tin_check' %}">Ouvrir</a></div>
+    </article>
+</section>
+
+<section class="grid grid-split">
+    <article class="card" style="padding:18px">
+        <div class="workspace-panel-head" style="padding:0 0 10px;border:0">
+            <span class="eyebrow">Dernières factures</span>
+            <h3>Transmissions récentes</h3>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Facture</th><th>Date</th><th>Statut</th><th class="num">Total</th></tr></thead>
+                <tbody>
+                    {% for record in recent_invoices %}
+                    <tr>
+                        <td><a href="{% url 'obr_ebms:invoice_detail' record.pk %}">{{ record.invoice_number }}</a></td>
+                        <td>{{ record.invoice_date|date:"d/m/Y H:i" }}</td>
+                        <td><span class="{{ record.status|badge_class }}">{{ record.get_status_display }}</span></td>
+                        <td class="num">{{ record.total_amount|money }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="4" class="empty-state">Aucune facture eBMS.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </article>
+    <article class="card" style="padding:18px">
+        <div class="workspace-panel-head" style="padding:0 0 10px;border:0">
+            <span class="eyebrow">Journal</span>
+            <h3>Activité OBR</h3>
+        </div>
+        <div class="overview-list">
+            {% for log in recent_logs %}
+            <div class="overview-row">
+                <div>
+                    <strong>{{ log.get_action_display }}</strong>
+                    <small>{{ log.reference|default:"—" }} · {{ log.created_at|date:"d/m/Y H:i" }}</small>
+                </div>
+                <span class="status-badge {% if log.success %}status-success{% else %}status-danger{% endif %}">
+                    {% if log.success %}OK{% else %}Échec{% endif %}
+                </span>
+            </div>
+            {% empty %}
+            <p class="overview-empty muted">Aucune activité enregistrée.</p>
+            {% endfor %}
+        </div>
+        <div style="margin-top:12px"><a class="button button-light button-small" href="{% url 'obr_ebms:logs' %}">Tout le journal</a></div>
+    </article>
+</section>
+{% endblock %}

@@ -1,0 +1,56 @@
+{% extends 'base.html' %}{% load ui %}
+{% block title %}Vérification NIF{% endblock %}
+{% block content %}
+<section class="page-head">
+    <div>
+        <div class="breadcrumbs"><a href="/">Accueil</a> / <a href="{% url 'obr_ebms:dashboard' %}">OBR eBMS</a> / Vérification NIF</div>
+        <span class="eyebrow">Contrôle contribuable</span>
+        <h2>Vérification du NIF</h2>
+        <p>Interrogez OBR pour confirmer l’existence et l’identité fiscale d’un contribuable.</p>
+    </div>
+    <a class="button button-light" href="{% url 'obr_ebms:dashboard' %}">Retour</a>
+</section>
+
+<section class="grid grid-split grid-split-reverse">
+    <form method="post" class="card form-card">
+        {% csrf_token %}
+        <div class="form-grid" style="grid-template-columns:1fr">
+            <label class="field-group">
+                <span class="field-label">{{ form.tin.label }}</span>
+                {{ form.tin }}
+                {% if form.tin.errors %}<small class="field-error">{{ form.tin.errors|striptags }}</small>{% endif %}
+            </label>
+        </div>
+        <div class="actions" style="margin-top:16px">
+            <button class="button" type="submit">Vérifier auprès d’OBR</button>
+        </div>
+    </form>
+
+    <article class="card" style="padding:18px">
+        <div class="workspace-panel-head" style="padding:0 0 10px;border:0">
+            <span class="eyebrow">Résultat</span>
+            <h3>Identité fiscale</h3>
+        </div>
+        {% if error %}
+        <div class="alert" role="alert"><strong>Vérification impossible</strong><p>{{ error }}</p></div>
+        {% elif result %}
+        <div class="overview-list">
+            <div class="overview-row"><div><strong>NIF</strong><small>{{ result.tin|default:form.tin.value }}</small></div>
+                <span class="status-badge {% if result.valid %}status-success{% else %}status-danger{% endif %}">
+                    {% if result.valid %}Valide{% else %}Non valide{% endif %}
+                </span>
+            </div>
+            <div class="overview-row"><div><strong>Nom</strong><small>{{ result.name|default:"—" }}</small></div></div>
+            <div class="overview-row"><div><strong>Type</strong><small>{{ result.taxpayer_type|default:"—" }}</small></div></div>
+            <div class="overview-row"><div><strong>Assujetti TVA</strong><small>{% if result.vat_taxpayer %}Oui{% else %}Non{% endif %}</small></div></div>
+            <div class="overview-row"><div><strong>Adresse</strong><small>{{ result.address|default:"—" }}</small></div></div>
+        </div>
+        <details style="margin-top:12px"><summary>Réponse brute</summary>
+            <pre style="white-space:pre-wrap;font-size:11px;max-height:280px;overflow:auto">{{ result|pprint }}</pre>
+        </details>
+        {% else %}
+        <p class="muted">Saisissez un NIF pour lancer la vérification.</p>
+        {% endif %}
+    </article>
+</section>
+{% endblock %}

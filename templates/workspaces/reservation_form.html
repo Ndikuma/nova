@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+{% block title %}{% if reservation %}Modifier la réservation{% else %}Nouvelle réservation{% endif %} · Réception{% endblock %}
+{% block content %}
+<section class="page-head">
+    <div>
+        <div class="breadcrumbs">
+            <a href="/">Accueil</a> / <a href="{% url 'workspaces:reception' %}">Réception</a> /
+            {% if reservation %}Modifier la réservation{% else %}Nouvelle réservation{% endif %}
+        </div>
+        <span class="eyebrow">Workspace réception · dossiers clients</span>
+        <h2>{% if booking_request %}Convertir la demande web{% elif reservation %}Modifier la réservation{% else %}Créer une réservation{% endif %}</h2>
+        <p>Les champs marqués d’un astérisque sont obligatoires. La chambre ne doit pas être déjà occupée sur la période.</p>
+    </div>
+    <a class="button button-light" href="{% url 'workspaces:reception' %}">Retour à la réception</a>
+</section>
+
+{% if booking_request %}
+<article class="card workspace-panel" style="margin-bottom:16px">
+    <div class="workspace-panel-head">
+        <span class="eyebrow">Demande web #{{ booking_request.pk }}</span>
+        <h2>{{ booking_request.guest_name }} · {{ booking_request.room_type.name }}</h2>
+        <p>{{ booking_request.check_in|date:"d/m/Y" }} → {{ booking_request.check_out|date:"d/m/Y" }} · {{ booking_request.adults }} voyageur{{ booking_request.adults|pluralize }} · {{ booking_request.get_contact_method_display }} {{ booking_request.phone }} {{ booking_request.email }}</p>
+    </div>
+    <div class="invoice-summary">
+        <div><span>Type demandé</span><strong>{{ booking_request.room_type.name }}</strong></div>
+        <div><span>Chambres disponibles</span><strong>{{ suggested_rooms|length }}</strong></div>
+    </div>
+    {% if suggested_rooms %}
+    <div class="overview-list" style="margin-top:10px">
+        {% for room in suggested_rooms %}
+        <div class="overview-row" style="cursor:default">
+            <div><strong>Chambre {{ room.number }}</strong><small>{{ room.room_type.name }} · étage {{ room.floor }}</small></div>
+            <a class="button button-small button-light" href="{% url 'workspaces:reservation_create' %}?booking_request={{ booking_request.pk }}&room={{ room.pk }}">Choisir cette chambre</a>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="muted" style="margin-top:8px">Aucune chambre disponible pour ce type sur la période demandée. Vérifiez la disponibilité ou ajustez les dates.</p>
+    {% endif %}
+</article>
+{% endif %}
+
+<form method="post" class="card form-card">
+    {% csrf_token %}
+    {% if booking_request %}<input type="hidden" name="booking_request" value="{{ booking_request.pk }}">{% endif %}
+    {% if form.errors %}
+    <div class="alert" role="alert" tabindex="-1" id="form-error-summary">
+        <strong>Certains champs nécessitent votre attention.</strong>
+        {% if form.non_field_errors %}<p>{{ form.non_field_errors|striptags }}</p>{% endif %}
+    </div>
+    {% endif %}
+    <div class="form-grid">
+        {% for field in form %}
+        <label class="field-group{% if field.errors %} has-error{% endif %}" for="{{ field.id_for_label }}">
+            <span class="field-label">{{ field.label }}{% if field.field.required %} <span class="required-mark">*</span>{% endif %}</span>
+            {{ field }}
+            {% if field.help_text %}<small class="field-help">{{ field.help_text }}</small>{% endif %}
+            {% if field.errors %}<small class="field-error">{{ field.errors|striptags }}</small>{% endif %}
+        </label>
+        {% endfor %}
+    </div>
+    <div class="actions" style="margin-top:22px">
+        <button class="button" type="submit">{% if reservation %}Enregistrer les modifications{% else %}Créer la réservation{% endif %}</button>
+        <a class="button button-light" href="{% url 'workspaces:reception' %}">Annuler</a>
+    </div>
+</form>
+
+{% if form.errors %}
+<script>
+(function () {
+    var banner = document.getElementById("form-error-summary");
+    if (banner) { banner.scrollIntoView({ block: "center" }); banner.focus(); }
+})();
+</script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,87 @@
+{% extends 'base.html' %}{% load ui %}
+{% block title %}Reçu {{ payment.invoice.number }} · Caisse{% endblock %}
+{% block content %}
+<section class="page-head receipt-toolbar">
+    <div>
+        <div class="breadcrumbs"><a href="/">Accueil</a> / <a href="{% url 'workspaces:cashier' %}">Caisse</a> / Reçu</div>
+        <span class="eyebrow">Workspace caisse · reçu de paiement</span>
+        <h2>Reçu de paiement</h2>
+    </div>
+    <div class="workspace-head-actions">
+        <a class="button button-light" href="{% url 'workspaces:cashier' %}">Retour à la caisse</a>
+        <a class="button button-light" href="/reports/documents/receipt/{{ payment.pk }}/print/" target="_blank" rel="noopener">Version imprimable</a>
+        <a class="button button-light" href="/reports/documents/receipt/{{ payment.pk }}/print/?ticket=1" target="_blank" rel="noopener">Ticket POS</a>
+        <a class="button button-light" href="/reports/documents/receipt/{{ payment.pk }}/pdf/">PDF</a>
+        <button class="button" type="button" onclick="window.print()">Imprimer</button>
+    </div>
+</section>
+
+<article class="receipt-page card" id="payment-receipt">
+    <header class="receipt-head">
+        <div class="receipt-brand">
+            <span class="receipt-logo">{{ company.short_name }}</span>
+            <div>
+                <strong>{{ company.name }}</strong>
+                <small>{{ company.tagline }}</small>
+            </div>
+        </div>
+        <div class="receipt-meta">
+            <strong>REÇU DE PAIEMENT</strong>
+            <span>Reçu #{{ payment.pk }}</span>
+            <span>{{ payment.paid_at|date:"d/m/Y H:i" }}</span>
+        </div>
+    </header>
+
+    <div class="receipt-info">
+        <div>
+            <span>Facture</span>
+            <strong>{{ payment.invoice.number }}</strong>
+            <small>Émise le {{ payment.invoice.issued_at|date:"d/m/Y H:i" }}</small>
+        </div>
+        <div>
+            <span>Client</span>
+            <strong>{{ payment.invoice.customer }}</strong>
+            <small>{{ payment.invoice.customer.phone|default:"—" }}</small>
+        </div>
+        <div>
+            <span>Caissier</span>
+            <strong>{{ payment.received_by }}</strong>
+            <small>{{ payment.method.name }}</small>
+        </div>
+    </div>
+
+    <div class="table-wrap receipt-items">
+        <table>
+            <thead><tr><th>Désignation</th><th>Qté</th><th>P.U.</th><th>Total</th></tr></thead>
+            <tbody>
+                {% for item in payment.invoice.items.all %}
+                <tr>
+                    <td>{{ item.description }}</td>
+                    <td>{{ item.quantity }}</td>
+                    <td>{{ item.unit_price|money }}</td>
+                    <td>{{ item.subtotal|money }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="4" class="muted" style="text-align:center;padding:18px">Aucune ligne.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="receipt-totals">
+        <div><span>Total facture</span><strong>{{ payment.invoice.total_amount|money }}</strong></div>
+        <div><span>Total payé</span><strong>{{ payment.invoice.paid_amount|money }}</strong></div>
+        <div><span>Solde restant</span><strong>{{ payment.invoice.balance|money }}</strong></div>
+        <div class="receipt-paid"><span>Montant encaissé</span><strong>{{ payment.amount|money }}</strong></div>
+    </div>
+
+    {% if payment.reference %}
+    <p class="receipt-reference">Référence : <strong>{{ payment.reference }}</strong></p>
+    {% endif %}
+
+    <footer class="receipt-footer">
+        <p>{{ company.name }} · {{ company.contact_line }}</p>
+        <small>{{ company.receipt_footer }}</small>
+    </footer>
+</article>
+{% endblock %}

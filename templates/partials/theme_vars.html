@@ -1,0 +1,13 @@
+<style>
+  :root {
+    {% for name, value in company.theme_light.items %}{{ name }}: {{ value }}; {% endfor %}
+  }
+  :root[data-theme="dark"] {
+    {% for name, value in company.theme_dark.items %}{{ name }}: {{ value }}; {% endfor %}
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      {% for name, value in company.theme_dark.items %}{{ name }}: {{ value }}; {% endfor %}
+    }
+  }
+</style>

@@ -1,0 +1,13 @@
+{% extends 'public/base.html' %}{% load static %}
+{% block title %}Restaurant · {{ company.name }}{% endblock %}
+{% block content %}
+<section class="pub-container pub-menu-hero">
+    <div class="pub-menu-hero-copy">
+        <h1>Carte du restaurant</h1>
+        {% include 'public/_menu_nav.html' with current='restaurant' %}
+    </div>
+    <img src="{% static 'images/hospitality-table.webp' %}" width="1280" height="853" alt="" fetchpriority="high">
+</section>
+{% regroup items by category as categories %}
+{% include 'public/_catalog_sections.html' with empty_message="La carte du restaurant est en préparation." %}
+{% endblock %}

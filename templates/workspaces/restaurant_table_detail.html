@@ -1,0 +1,141 @@
+{% extends 'base.html' %}{% load ui %}
+{% block title %}{{ table.name }} · Restaurant{% endblock %}
+{% block content %}
+<section class="page-head">
+    <div>
+        <div class="breadcrumbs"><a href="/">Accueil</a> / <a href="{% url 'workspaces:service' %}">Service</a> / {{ table.name }}</div>
+        <span class="eyebrow">Restaurant · fiche table</span>
+        <h2>{{ table.name }}</h2>
+        <p>{% if table.section %}{{ table.section }} · {% endif %}{{ table.capacity }} couvert{{ table.capacity|pluralize }}</p>
+    </div>
+    <div class="page-actions">
+        <span class="status-badge {% if table.status == 'AVAILABLE' %}status-success{% elif table.status == 'OCCUPIED' %}status-pill blue{% elif table.status == 'RESERVED' %}status-warning{% else %}status-danger{% endif %}">{{ table.get_status_display }}</span>
+        <a class="button" href="{% url 'workspaces:service_order_create' %}?table={{ table.pk }}">Nouvelle commande</a>
+        <a class="button button-light" href="{% url 'workspaces:service' %}">Retour service</a>
+    </div>
+</section>
+
+<section class="workspace-split">
+    <article class="card workspace-panel">
+        <div class="workspace-panel-head">
+            <span class="eyebrow">Impayés / à encaisser</span>
+            <h2>Commandes avec solde</h2>
+        </div>
+        <div class="overview-list">
+            {% for order in unpaid_orders %}
+            <div class="overview-row" style="cursor:default;align-items:flex-start">
+                <div>
+                    <strong>Commande #{{ order.pk }} · {{ order.invoice.number }}</strong>
+                    <small>{{ order.customer|default:"Client de passage" }} · Total {{ order.total_amount|money }} · Payé {{ order.invoice.paid_amount|money }}</small>
+                    <small>Solde à régler : <strong>{{ order.invoice.balance|money }}</strong></small>
+                </div>
+                <div class="desk-row-actions">
+                    <span class="{{ order.invoice.status|badge_class }}">{{ order.invoice.get_status_display }}</span>
+                    <a class="button button-small button-light" href="{% url 'reports:invoice_print' order.invoice.pk %}" target="_blank" rel="noopener">Facture</a>
+                    <a class="button button-small button-light" href="{% url 'reports:invoice_print' order.invoice.pk %}?ticket=1" target="_blank" rel="noopener">Ticket facture</a>
+                    {% if can_collect %}<a class="button button-small" href="{% url 'workspaces:payment_create' order.invoice.pk %}">Encaisser</a>{% endif %}
+                </div>
+            </div>
+            {% empty %}
+            <p class="overview-empty muted">Aucune commande impayée sur cette table.</p>
+            {% endfor %}
+        </div>
+    </article>
+
+    <article class="card workspace-panel">
+        <div class="workspace-panel-head">
+            <span class="eyebrow">Service</span>
+            <h2>Non facturées / en cours</h2>
+        </div>
+        <div class="overview-list">
+            {% for order in unbilled_orders %}
+            <div class="overview-row" style="cursor:default;align-items:flex-start">
+                <div>
+                    <strong>Commande #{{ order.pk }}</strong>
+                    <small>{{ order.customer|default:"Client de passage" }} · {{ order.items.count }} article(s) · {{ order.total_amount|money }}</small>
+                </div>
+                <div class="desk-row-actions">
+                    <span class="{{ order.status|badge_class }}">{{ order.get_status_display }}</span>
+                    <a class="button button-small button-light" href="{% url 'reports:order_print' 'restaurant' order.pk %}" target="_blank" rel="noopener">Commande</a>
+                    <a class="button button-small button-light" href="{% url 'reports:order_print' 'restaurant' order.pk %}?ticket=1" target="_blank" rel="noopener">Ticket commande</a>
+                </div>
+            </div>
+            {% empty %}
+            <p class="overview-empty muted">Aucune commande sans facture en cours.</p>
+            {% endfor %}
+        </div>
+    </article>
+</section>
+
+<article class="card workspace-panel">
+    <div class="workspace-panel-head">
+        <span class="eyebrow">Commandes actives</span>
+        <h2>Détail & statut</h2>
+    </div>
+    <div class="order-list">
+        {% for order in active_orders %}
+        <article class="order-card">
+            <header>
+                <div>
+                    <strong>Commande #{{ order.pk }}</strong>
+                    <small>{{ order.customer|default:"Client de passage" }} · {{ order.get_source_display }} · {{ order.created_at|date:"d/m H:i" }}</small>
+                </div>
+                <div class="order-card-head-actions">
+                    <span class="{{ order.status|badge_class }}">{{ order.get_status_display }}</span>
+                    <span class="record-title">{{ order.total_amount|money }}</span>
+                </div>
+            </header>
+            <ul class="order-items">
+                {% for item in order.items.all %}
+                <li><span><b>{{ item.quantity }}×</b> {{ item.menu_item.name }}{% if item.notes %}<small class="waiter-item-note">{{ item.notes }}</small>{% endif %}</span><em>{{ item.subtotal|money }}</em></li>
+                {% endfor %}
+            </ul>
+            <div class="order-card-footer" style="flex-wrap:wrap;gap:8px">
+                {% if order.invoice %}
+                <span class="status-badge status-pill blue">Facture {{ order.invoice.number }} · solde {{ order.invoice.balance|money }} · {{ order.invoice.get_status_display }}</span>
+                <a class="button button-small button-light" href="{% url 'reports:invoice_print' order.invoice.pk %}" target="_blank" rel="noopener">Facture</a>
+                <a class="button button-small button-light" href="{% url 'reports:invoice_print' order.invoice.pk %}?ticket=1" target="_blank" rel="noopener">Ticket facture</a>
+                {% if can_collect and order.invoice.balance > 0 %}<a class="button button-small" href="{% url 'workspaces:payment_create' order.invoice.pk %}">Encaisser</a>{% endif %}
+                {% else %}
+                <span class="muted">Facture non transmise</span>
+                {% endif %}
+                <a class="button button-small button-light" href="{% url 'reports:order_print' 'restaurant' order.pk %}" target="_blank" rel="noopener">Commande</a>
+                <a class="button button-small button-light" href="{% url 'reports:order_print' 'restaurant' order.pk %}?ticket=1" target="_blank" rel="noopener">Ticket commande</a>
+            </div>
+        </article>
+        {% empty %}
+        <p class="overview-empty muted">Aucune commande active sur cette table.</p>
+        {% endfor %}
+    </div>
+</article>
+
+<article class="card workspace-panel">
+    <div class="workspace-panel-head">
+        <span class="eyebrow">Historique</span>
+        <h2>Dernières commandes</h2>
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Commande</th><th>Date</th><th>Client</th><th>Total</th><th>Statut</th><th>Facture / paiement</th></tr></thead>
+            <tbody>
+                {% for order in recent_orders %}
+                <tr>
+                    <td>#{{ order.pk }}</td>
+                    <td>{{ order.created_at|date:"d/m/Y H:i" }}</td>
+                    <td>{{ order.customer|default:"Client de passage" }}</td>
+                    <td>{{ order.total_amount|money }}</td>
+                    <td><span class="{{ order.status|badge_class }}">{{ order.get_status_display }}</span></td>
+                    <td>
+                        {% if order.invoice %}
+                        {{ order.invoice.number }} · <span class="{{ order.invoice.status|badge_class }}">{{ order.invoice.get_status_display }}</span> · solde {{ order.invoice.balance|money }}
+                        {% else %}<span class="muted">—</span>{% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="6" class="muted" style="padding:18px;text-align:center">Aucun historique.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</article>
+{% endblock %}

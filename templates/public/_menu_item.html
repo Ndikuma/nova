@@ -1,0 +1,35 @@
+{% if compact %}
+<article class="pub-menu-preview">
+    <div class="pub-menu-item-title">
+        <h4>{{ item.name }}</h4>
+        <strong class="pub-menu-price">{{ item.selling_price|floatformat:"-2g" }} {{ company.currency_symbol|default:company.currency }}</strong>
+    </div>
+    {% if item.ingredient_names %}<p class="pub-ingredients">{{ item.ingredient_names|join:', ' }}</p>{% endif %}
+</article>
+{% else %}
+<article class="pub-menu-item" data-menu-item="{{ item.name }} {{ item.description }} {{ item.serving_size }} {{ item.ingredient_names|join:' ' }}">
+    {% if item.image %}
+    <div class="pub-menu-item-photo">
+        <img src="{{ item.image.url }}" alt="" loading="lazy">
+    </div>
+    {% endif %}
+    <div class="pub-menu-item-copy">
+        <div class="pub-menu-item-title">
+            <div>
+                <h3>{{ item.name }}</h3>
+                {% if item.serving_size %}<p class="pub-menu-portion">{{ item.serving_size }}</p>{% endif %}
+            </div>
+            <strong class="pub-menu-price">{{ item.selling_price|floatformat:"-2g" }} {{ company.currency_symbol|default:company.currency }}</strong>
+        </div>
+        {% if item.description %}<p class="pub-menu-item-description">{{ item.description|linebreaksbr }}</p>{% endif %}
+        {% if item.ingredient_names %}
+        <div class="pub-ingredients pub-menu-item-ingredients">
+            <span>Ingrédients renseignés</span>
+            <ul aria-label="Ingrédients de {{ item.name }}">
+                {% for ingredient in item.ingredient_names %}<li>{{ ingredient }}</li>{% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+</article>
+{% endif %}

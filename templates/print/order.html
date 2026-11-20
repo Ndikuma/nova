@@ -1,0 +1,70 @@
+{% extends 'print/base.html' %}{% load ui %}
+{% block title %}Commande #{{ order.pk }}{% endblock %}
+{% block toolbar_title %}Commande #{{ order.pk }}{% endblock %}
+{% block toolbar_actions %}
+{% if bar_order %}
+<a class="btn" href="{% url 'reports:order_pdf' 'bar' order.pk %}">Télécharger le PDF</a>
+<a class="btn" href="{% url 'reports:order_print' 'bar' order.pk %}?ticket=1">Ticket POS</a>
+{% else %}
+<a class="btn" href="{% url 'reports:order_pdf' 'restaurant' order.pk %}">Télécharger le PDF</a>
+<a class="btn" href="{% url 'reports:order_print' 'restaurant' order.pk %}?ticket=1">Ticket POS</a>
+{% endif %}
+{% endblock %}
+{% block document_footer %}{{ brand.footer }}{% endblock %}
+{% block doc_meta %}
+<h1>{% if bar_order %}COMMANDE BAR{% else %}COMMANDE RESTAURANT{% endif %}</h1>
+<span>Commande #{{ order.pk }}</span>
+<span>Créée le {{ order.created_at|date:"d/m/Y à H:i" }}</span>
+<span class="status">{{ order.get_status_display }}</span>
+{% endblock %}
+{% block content %}
+<section class="doc-info">
+    <div>
+        <span>Client</span>
+        <strong>{{ order.customer|default:"Client de passage" }}</strong>
+        <small>{% if order.customer %}{{ order.customer.phone|default:"—" }}{% else %}—{% endif %}</small>
+    </div>
+    <div>
+        <span>Table / lieu</span>
+        <strong>{{ order.table|default:"Sans table" }}</strong>
+        {% if not bar_order %}<small>{{ order.get_source_display }}</small>{% endif %}
+    </div>
+    <div>
+        <span>Suivi / caisse</span>
+        <strong>Pris par {{ order.created_by }}</strong>
+        <small>{% if invoice %}Facture {{ invoice.number }} · solde {{ invoice.balance|money }} · {{ invoice.get_status_display }}{% else %}Aucune facture transmise — à présenter à la caisse si besoin{% endif %}</small>
+    </div>
+</section>
+
+{% if order.notes %}<p class="doc-note"><strong>Notes :</strong> {{ order.notes }}</p>{% endif %}
+
+<div class="doc-table-wrap" tabindex="0" role="region" aria-label="Articles de la commande">
+    <table>
+        <thead>
+            <tr>
+                <th>Article</th>
+                <th class="num">Qté</th>
+                <th class="num">P.U.</th>
+                <th class="num">Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for line in lines %}
+            <tr>
+                <td>{{ line.name }}{% if line.notes %}<br><small>{{ line.notes }}</small>{% endif %}</td>
+                <td class="num">{{ line.quantity }}</td>
+                <td class="num">{{ line.unit_price|money }}</td>
+                <td class="num">{{ line.subtotal|money }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4" style="text-align:center;padding:18px">Aucun article.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="totals">
+    <div class="total-row grand"><span>Total commande</span><strong>{{ order.total_amount|money }}</strong></div>
+    {% if invoice %}<div class="total-row"><span>Solde facture</span><strong>{{ invoice.balance|money }}</strong></div>{% endif %}
+</div>
+{% endblock %}

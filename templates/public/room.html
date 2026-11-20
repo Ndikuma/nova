@@ -1,0 +1,65 @@
+{% extends 'public/base.html' %}
+{% block title %}{{ room_type.name }} · {{ company.name }}{% endblock %}
+{% block content %}
+<section class="pub-room-hero">
+    <div class="pub-container">
+        <a class="pub-link" href="{% url 'public_home' %}{% if stay %}?check_in={{ stay.check_in|date:'Y-m-d' }}&amp;check_out={{ stay.check_out|date:'Y-m-d' }}&amp;adults={{ stay.adults }}{% endif %}#chambres"><span aria-hidden="true">←</span> Toutes les chambres</a>
+        <h1>{{ room_type.name }}</h1>
+        <p>Jusqu’à {{ room_type.max_capacity }} personne{{ room_type.max_capacity|pluralize }}</p>
+    </div>
+</section>
+
+<div class="pub-container pub-room-layout">
+    {% if room_type.description or room_type.amenities %}
+    <section class="pub-room-info">
+        <h2>À propos de la chambre</h2>
+        {% if room_type.description %}{{ room_type.description|linebreaks }}{% endif %}
+        {% if room_type.amenities %}
+        <ul class="pub-amenities" aria-label="Équipements">
+            {% for amenity in room_type.amenities %}<li>{{ amenity }}</li>{% endfor %}
+        </ul>
+        {% endif %}
+    </section>
+    {% endif %}
+    <section class="pub-room-booking">
+        <h2>Préparer votre séjour</h2>
+        {% url 'public_room' pk=room_type.pk as search_url %}
+        {% include 'public/_search.html' with action=search_url|add:'#recherche' %}
+        {% if stay %}
+        <div class="pub-room-result">
+            {% include 'public/_room_status.html' with room=room_type %}
+            {% if room_type.is_available and room_type.max_capacity >= stay.adults %}
+                {% with phone=company.phone|default:company.phone_secondary %}
+                {% if phone %}<a class="pub-link" href="tel:{{ phone|cut:' ' }}">Appeler la réception</a>{% endif %}
+                {% if company.whatsapp_url %}<a class="pub-link" href="{{ company.whatsapp_url }}">Écrire à la réception sur WhatsApp</a>{% endif %}
+                {% if company.email %}<a class="pub-link" href="mailto:{{ company.email|urlencode:'@' }}?subject=R%C3%A9servation%20-%20{{ room_type.name|urlencode:"" }}&amp;body={{ 'Arrivée'|urlencode }}%20{{ stay.check_in|date:'d/m/Y' }}%0A{{ 'Départ'|urlencode }}%20{{ stay.check_out|date:'d/m/Y' }}%0AVoyageurs%20{{ stay.adults }}">Demander une réservation par e-mail</a>{% endif %}
+                {% endwith %}
+            {% endif %}
+        </div>
+        {% endif %}
+        <div class="pub-booking-request" id="demande">
+            {% for message in messages %}
+                {% if 'web-booking' in message.tags %}
+                <p class="pub-booking-feedback {{ message.level_tag }}" role="{% if message.level_tag == 'error' %}alert{% else %}status{% endif %}">{{ message }}</p>
+                {% endif %}
+            {% endfor %}
+            {% if can_request %}
+            <h3>Demander une réservation</h3>
+            <p>La réception vous contactera par téléphone, WhatsApp ou e-mail, selon votre choix.</p>
+            <form class="pub-booking-form" method="post" action="?{{ stay_query }}#demande" data-booking-form>
+                {% csrf_token %}
+                {% for field in booking_form %}
+                <div class="pub-search-field"{% if field.name == 'email' or field.name == 'phone' %} data-contact-field="{{ field.name }}"{% endif %}>
+                    {{ field.label_tag }}
+                    {{ field }}
+                    {% if field.help_text %}<small class="pub-booking-help" id="{{ field.auto_id }}_helptext">{{ field.help_text }}</small>{% endif %}
+                    {{ field.errors }}
+                </div>
+                {% endfor %}
+                <button class="pub-button" type="submit">Envoyer ma demande</button>
+            </form>
+            {% endif %}
+        </div>
+    </section>
+</div>
+{% endblock %}

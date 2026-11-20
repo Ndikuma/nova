@@ -1,0 +1,200 @@
+{% extends 'base.html' %}{% load ui %}{% block title %}{{ object }} · {{ label }}{% endblock %}
+{% block content %}
+<section class="page-head">
+    <div>
+        <div class="breadcrumbs">
+            <a href="/">Accueil</a> / <a href="{% url 'module_home' module %}">{{ config.title }}</a> /
+            <a href="{% url 'entity_list' module entity %}">{{ label }}</a> / {{ object }}
+        </div>
+        <span class="eyebrow">{{ config.title|upper }} · {{ label|upper }}</span>
+        <h2>{{ object }}</h2>
+    </div>
+    <div class="page-actions">
+        {% if can_collect_payment %}
+        <a class="button" href="{% url 'workspaces:payment_create' object.pk %}">Encaisser</a>
+        {% endif %}
+        {% if printable_document == 'invoice' %}
+        <a class="button button-light" href="{% url 'reports:invoice_print' object.pk %}" target="_blank" rel="noopener">Imprimer</a>
+        <a class="button button-light" href="{% url 'reports:invoice_pdf' object.pk %}">PDF</a>
+        {% elif printable_document == 'receipt' %}
+        <a class="button button-light" href="{% url 'reports:receipt_print' object.pk %}" target="_blank" rel="noopener">Imprimer le reçu</a>
+        <a class="button button-light" href="{% url 'reports:receipt_pdf' object.pk %}">PDF</a>
+        {% endif %}
+        {% if not posted_record and not read_only_record %}<a class="button" href="{% url 'entity_edit' module entity object.pk %}">Modifier</a>{% endif %}
+        <a class="button button-light" href="{% url 'entity_list' module entity %}">Retour à la liste</a>
+    </div>
+</section>
+
+<div class="detail-columns">
+    <article class="card detail-section">
+        <div class="detail-section-head">
+            <h3>Informations</h3>
+            <p>{{ cells|length }} champ{{ cells|length|pluralize }}{% if invoice_source %} · {{ invoice_source }}{% endif %}</p>
+        </div>
+        <div class="detail-grid">
+            {% for cell in cells %}
+            <div class="detail-item">
+                <span class="detail-label">{{ cell.label }}</span>
+                <span class="detail-value">
+                    {% if cell.is_status and cell.raw %}
+                    <span class="{{ cell.raw|badge_class }}">{{ cell.value }}</span>
+                    {% elif cell.is_datetime %}
+                    {{ cell.value|date:"d/m/Y à H:i" }}
+                    {% elif cell.is_date %}
+                    {{ cell.value|date:"d/m/Y" }}
+                    {% else %}
+                    {{ cell.value }}
+                    {% endif %}
+                </span>
+            </div>
+            {% endfor %}
+        </div>
+        {% if detail_lines %}
+        <div class="detail-section-head" style="margin-top:20px">
+            <h3>{{ detail_lines.title }}</h3>
+            <p>Gérées avec l’enregistrement principal</p>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead><tr>{% for h in detail_lines.headers %}<th>{{ h }}</th>{% endfor %}</tr></thead>
+                <tbody>
+                    {% for row in detail_lines.rows %}
+                    <tr>
+                        {% for cell in row.cells %}
+                        <td>{% if cell.1 %}{{ cell.0|money }}{% else %}{{ cell.0 }}{% endif %}</td>
+                        {% endfor %}
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="{{ detail_lines.headers|length }}" class="muted" style="padding:18px;text-align:center">{{ detail_lines.empty }}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+        {% if related_invoice %}
+        <div style="margin-top:16px"><a class="button button-light button-small" href="{% url 'entity_detail' 'finance' 'invoice' related_invoice.pk %}">Voir la facture {{ related_invoice.number }}</a></div>
+        {% endif %}
+        {% if source_booking_requests %}
+        <div class="detail-section-head" style="margin-top:20px">
+            <h3>Demande web d’origine</h3>
+            <p>Demande publique liée à cette réservation</p>
+        </div>
+        <div class="overview-list">
+            {% for req in source_booking_requests %}
+            <div class="overview-row" style="cursor:default;gap:8px;align-items:flex-start">
+                <div>
+                    <strong>#{{ req.pk }} · {{ req.guest_name }}</strong>
+                    <small>{{ req.room_type.name }} · {{ req.check_in|date:"d/m/Y" }} → {{ req.check_out|date:"d/m/Y" }}</small>
+                    <small>{{ req.get_contact_method_display }}{% if req.phone %} · {{ req.phone }}{% endif %}{% if req.email %} · {{ req.email }}{% endif %}</small>
+                </div>
+                <a class="button button-small button-light" href="/module/hotel/bookingrequest/{{ req.pk }}/">Voir la demande</a>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% if related_payments != None %}
+        <div class="detail-section-head" style="margin-top:20px">
+            <h3>Paiements</h3>
+            <p>Encaissements liés à cette facture</p>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Reçu</th><th>Date</th><th>Moyen</th><th>Montant</th><th>Caissier</th><th></th></tr></thead>
+                <tbody>
+                    {% for payment in related_payments %}
+                    <tr>
+                        <td>#{{ payment.pk }}</td>
+                        <td>{{ payment.paid_at|date:"d/m/Y H:i" }}</td>
+                        <td>{{ payment.method.name }}</td>
+                        <td>{{ payment.amount|money }}</td>
+                        <td>{{ payment.received_by }}</td>
+                        <td class="desk-row-actions">
+                            <a class="button button-small button-light" href="{% url 'reports:receipt_print' payment.pk %}" target="_blank" rel="noopener">Imprimer</a>
+                            <a class="button button-small button-light" href="{% url 'reports:receipt_pdf' payment.pk %}">PDF</a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="6" class="muted" style="padding:18px;text-align:center">Aucun paiement enregistré.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </article>
+
+    {% if not posted_record and not read_only_record %}<aside class="detail-side-stack">
+        <article class="card">
+            <div class="detail-section-head"><h3>Actions</h3></div>
+            <div class="record-actions">
+                <a class="button" href="{% url 'entity_edit' module entity object.pk %}">Modifier</a>
+                <a class="button button-light" href="{% url 'entity_list' module entity %}">Retour</a>
+            </div>
+        </article>
+
+        <article class="card danger-zone">
+            <div>
+                <strong>Zone sensible</strong>
+                <p class="muted" style="margin-top:4px">La suppression est définitive et peut être bloquée si l’enregistrement est utilisé ailleurs.</p>
+            </div>
+            <a class="button danger-button" href="{% url 'entity_delete' module entity object.pk %}">Supprimer</a>
+        </article>
+    </aside>{% elif printable_document %}<aside class="detail-side-stack">
+        <article class="card">
+            <div class="detail-section-head"><h3>Documents</h3></div>
+            <div class="record-actions">
+                {% if printable_document == 'invoice' %}
+                <a class="button" href="{% url 'reports:invoice_print' object.pk %}" target="_blank" rel="noopener">Imprimer</a>
+                <a class="button button-light" href="{% url 'reports:invoice_pdf' object.pk %}">Télécharger PDF</a>
+                {% elif printable_document == 'receipt' %}
+                <a class="button" href="{% url 'reports:receipt_print' object.pk %}" target="_blank" rel="noopener">Imprimer le reçu</a>
+                <a class="button button-light" href="{% url 'reports:receipt_pdf' object.pk %}">Télécharger PDF</a>
+                {% endif %}
+            </div>
+        </article>
+    </aside>{% elif booking_actions %}<aside class="detail-side-stack">
+        <article class="card">
+            <div class="detail-section-head"><h3>Actions demande web</h3>
+                <p>{% if booking_actions.converted %}Convertie{% elif booking_actions.pending %}En attente{% else %}Traitée{% endif %}</p>
+            </div>
+            <div class="record-actions" style="flex-wrap:wrap;gap:8px">
+                {% if object.contact_method == 'whatsapp' and object.phone %}
+                <a class="button button-light" href="https://wa.me/{{ object.phone|cut:'+' }}" target="_blank" rel="noopener">WhatsApp</a>
+                {% elif object.contact_method == 'phone' and object.phone %}
+                <a class="button button-light" href="tel:{{ object.phone }}">Appeler</a>
+                {% elif object.email %}
+                <a class="button button-light" href="mailto:{{ object.email }}?subject=Demande%20de%20r%C3%A9servation%20%23{{ object.pk }}">E-mail</a>
+                {% endif %}
+                {% if booking_actions.converted %}
+                <a class="button" href="/module/hotel/reservation/{{ object.reservation_id }}/">Voir la réservation</a>
+                {% elif booking_actions.pending %}
+                <a class="button" href="{% url 'workspaces:reservation_create' %}?booking_request={{ object.pk }}">Convertir en réservation</a>
+                <form method="post" action="{% url 'workspaces:resolve_booking_request' object.pk %}" style="margin:0">{% csrf_token %}<button class="button button-light" type="submit">Marquer traitée</button></form>
+                {% else %}
+                <a class="button" href="{% url 'workspaces:reservation_create' %}?booking_request={{ object.pk }}">Créer une réservation</a>
+                <form method="post" action="{% url 'workspaces:reopen_booking_request' object.pk %}" style="margin:0">{% csrf_token %}<button class="button button-light" type="submit">Rouvrir</button></form>
+                {% endif %}
+                <a class="button button-light" href="{% url 'workspaces:reception' %}#demandes-web">Réception</a>
+            </div>
+            <p class="muted" style="margin-top:10px;font-size:12px">Contactez le voyageur, vérifiez la disponibilité, puis convertissez en réservation ou marquez la demande comme traitée.</p>
+        </article>
+        <article class="card">
+            <div class="detail-section-head"><h3>Disponibilité ({{ object.room_type.name }})</h3><p>{{ booking_actions.suggested_rooms|length }} chambre(s) libre(s)</p></div>
+            {% if booking_actions.matched_customer %}
+            <p class="muted" style="font-size:12px;margin-bottom:8px">Client correspondant : <strong>{{ booking_actions.matched_customer }}</strong> · <a href="/module/core/customer/{{ booking_actions.matched_customer.pk }}/">Voir fiche</a></p>
+            {% else %}
+            <p class="muted" style="font-size:12px;margin-bottom:8px">Aucun client existant correspondant. Un client sera créé lors de la conversion si vous renseignez ses informations.</p>
+            {% endif %}
+            <div class="overview-list">
+                {% for room in booking_actions.suggested_rooms %}
+                <div class="overview-row" style="cursor:default">
+                    <div><strong>Chambre {{ room.number }}</strong><small>Étage {{ room.floor|default:"—" }}</small></div>
+                    {% if not booking_actions.converted %}<a class="button button-small" href="{% url 'workspaces:reservation_create' %}?booking_request={{ object.pk }}&amp;room={{ room.pk }}">Choisir</a>{% else %}<span class="status-badge status-success">Libre</span>{% endif %}
+                </div>
+                {% empty %}
+                <p class="overview-empty muted">Aucune chambre disponible pour cette période. Vérifiez les dates ou le type de chambre.</p>
+                {% endfor %}
+            </div>
+        </article>
+    </aside>{% endif %}
+</div>
+{% endblock %}

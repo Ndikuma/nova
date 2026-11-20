@@ -1,0 +1,67 @@
+{% extends 'base.html' %}{% load ui %}
+{% block title %}Encaisser {{ invoice.number }} · Caisse{% endblock %}
+{% block content %}
+<section class="page-head">
+    <div>
+        <div class="breadcrumbs"><a href="/">Accueil</a> / <a href="{% url 'workspaces:cashier' %}">Caisse</a> / Encaissement</div>
+        <span class="eyebrow">Workspace caisse · encaissement</span>
+        <h2>Encaisser la facture {{ invoice.number }}</h2>
+        <p>Le solde restant est proposé par défaut. Vous pouvez enregistrer un paiement partiel.</p>
+    </div>
+    <a class="button button-light" href="{% url 'workspaces:cashier' %}">Retour à la caisse</a>
+</section>
+
+<section class="workspace-split">
+    <article class="card workspace-panel">
+        <div class="workspace-panel-head">
+            <span class="eyebrow">Facture</span>
+            <h2>{{ invoice.number }}</h2>
+            <p>{{ invoice.customer }} · émise le {{ invoice.issued_at|date:"d/m/Y H:i" }}</p>
+        </div>
+        <div class="invoice-summary">
+            <div><span>Total facture</span><strong>{{ invoice.total_amount|money }}</strong></div>
+            <div><span>Déjà payé</span><strong>{{ invoice.paid_amount|money }}</strong></div>
+            <div><span>Solde restant</span><strong class="is-due">{{ invoice.balance|money }}</strong></div>
+            <div><span>Statut</span><span class="{{ invoice.status|badge_class }}">{{ invoice.get_status_display }}</span></div>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Désignation</th><th>Qté</th><th>Prix unitaire</th><th>Total</th></tr></thead>
+                <tbody>
+                    {% for item in invoice_items %}
+                    <tr>
+                        <td>{{ item.description }}</td>
+                        <td>{{ item.quantity }}</td>
+                        <td>{{ item.unit_price|money }}</td>
+                        <td>{{ item.subtotal|money }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="4" class="muted" style="padding:22px;text-align:center">Aucune ligne sur cette facture.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </article>
+
+    <article class="card workspace-panel">
+        <div class="workspace-panel-head">
+            <span class="eyebrow">Paiement</span>
+            <h2>Montant & moyen</h2>
+            <p>Choisissez le moyen de paiement et enregistrez le montant encaissé.</p>
+        </div>
+        <form method="post" class="stack-form">
+            {% csrf_token %}
+            {% if form.non_field_errors %}<div class="alert" role="alert">{{ form.non_field_errors|striptags }}</div>{% endif %}
+            {% for field in form %}
+            <label class="{% if field.errors %}has-error{% endif %}">
+                {{ field.label }}
+                {{ field }}
+                {% if field.help_text %}<small class="field-help">{{ field.help_text }}</small>{% endif %}
+                {% if field.errors %}<small class="field-error">{{ field.errors|striptags }}</small>{% endif %}
+            </label>
+            {% endfor %}
+            <button class="button" type="submit">Enregistrer le paiement</button>
+        </form>
+    </article>
+</section>
+{% endblock %}

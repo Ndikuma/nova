@@ -1,0 +1,19 @@
+{% extends 'base.html' %}{% block title %}Supprimer · {{ label }}{% endblock %}
+{% block content %}
+<div class="breadcrumbs">
+    <a href="/">Accueil</a> / <a href="{% url 'module_home' module %}">{{ config.title }}</a> /
+    <a href="{% url 'entity_list' module entity %}">{{ label }}</a> /
+    <a href="{% url 'entity_detail' module entity object.pk %}">{{ object }}</a> / Supprimer
+</div>
+
+<section class="card narrow-card">
+    <span class="eyebrow">{{ config.title|upper }}</span>
+    <h2>Confirmer la suppression</h2>
+    <p class="muted">Vous êtes sur le point de supprimer <strong>{{ object }}</strong>. Cette action est définitive et ne peut pas être annulée.</p>
+    <form method="post" class="actions" style="margin-top:18px">
+        {% csrf_token %}
+        <button class="button danger-button" type="submit">Supprimer définitivement</button>
+        <a class="button button-light" href="{% url 'entity_detail' module entity object.pk %}">Annuler</a>
+    </form>
+</section>
+{% endblock %}

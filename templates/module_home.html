@@ -1,0 +1,109 @@
+{% extends 'base.html' %}{% load ui %}{% block title %}{{ config.title }}{% endblock %}
+{% block content %}
+<section class="hero module-hero">
+    <div>
+        <div class="breadcrumbs" style="margin-bottom:8px"><a href="/">Accueil</a> / {{ config.title }}</div>
+        <span class="eyebrow">Module opérationnel</span>
+        <h2>{{ config.title }}</h2>
+        <p class="muted">{{ config.description }}</p>
+        <div class="module-components">
+            {% for component in components %}
+            <span class="component-chip">{{ component }}</span>
+            {% endfor %}
+        </div>
+    </div>
+    <div class="hero-side">
+        <div class="workspace-head-actions">
+            <span class="status-badge status-pill blue">{{ total }} enregistrement{{ total|pluralize }}</span>
+        </div>
+        <div class="quick-grid compact">
+            {% for action in quick_actions %}
+            <a class="quick-action" href="{{ action.url }}">
+                <span class="quick-icon">{% include "partials/sidebar_icon.html" with icon_name=action.icon %}</span>
+                <span><strong>{{ action.label }}</strong><small>{{ action.meta }}</small></span>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+
+{% if highlights %}
+<section class="workspace-kpis">
+    {% for h in highlights %}
+    <article class="workspace-kpi tone-{{ h.tone }}">
+        <div class="workspace-kpi-top">
+            <span class="workspace-kpi-icon">{% include "partials/sidebar_icon.html" with icon_name=h.icon %}</span>
+        </div>
+        <small>{{ h.label }}</small>
+        <strong>{% if h.money %}{{ h.value|money }}{% else %}{{ h.value }}{% endif %}</strong>
+        <p>{{ h.meta }}</p>
+    </article>
+    {% endfor %}
+</section>
+{% endif %}
+
+{% if panels %}
+<section class="module-panels">
+    {% for panel in panels %}
+    <article class="card overview-panel">
+        <div class="workspace-panel-head">
+            <span class="eyebrow">{{ panel.eyebrow }}</span>
+            <h3>{{ panel.title }}</h3>
+            <p>{{ panel.description }}</p>
+        </div>
+        {% if panel.kind == 'stats' %}
+        <div class="overview-stat-grid">
+            {% for row in panel.rows %}
+            <div class="overview-stat tone-{{ row.tone }}">
+                <span>{{ row.label }}</span>
+                <strong>{% if row.money %}{{ row.value|money }}{% else %}{{ row.value }}{% endif %}</strong>
+                <small>{{ row.meta }}</small>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="overview-list">
+            {% for row in panel.rows %}
+            <a class="overview-row" href="{{ row.url }}">
+                <div>
+                    <strong>{{ row.label }}</strong>
+                    <small>{{ row.meta }}</small>
+                </div>
+                {% if row.status %}<span class="{{ row.status|badge_class }}">{{ row.status_label }}</span>{% endif %}
+            </a>
+            {% empty %}
+            <p class="overview-empty muted">{{ panel.empty }}</p>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </article>
+    {% endfor %}
+</section>
+{% endif %}
+
+<section class="module-crud">
+    <div class="workspace-panel-head" style="padding-left:0;padding-right:0;border:0;margin-bottom:10px">
+        <span class="eyebrow">CRUD complet</span>
+        <h3>Écrans de gestion</h3>
+        <p>Parcourez, créez et modifiez les registres de ce module.</p>
+    </div>
+    <div class="grid">
+        {% for card in cards %}
+        <article class="card module-card">
+            <span class="module-icon">{% include "partials/sidebar_icon.html" with icon_name=card.icon %}</span>
+            <strong><a href="{{ card.url }}" style="color:inherit">{{ card.label }}</a></strong>
+            <span>{{ card.count }} enregistrement{{ card.count|pluralize }}</span>
+            <div class="module-card-actions">
+                <a class="button button-small" href="{{ card.url }}">Parcourir</a>
+                {% if card.create_url %}<a class="button button-light button-small" href="{{ card.create_url }}">+ Créer</a>{% endif %}
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="usage-note">
+    <span class="usage-icon">i</span>
+    <div><strong>Note d’utilisation</strong><p>{{ usage_note }}</p></div>
+</section>
+{% endblock %}

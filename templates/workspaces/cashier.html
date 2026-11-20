@@ -1,0 +1,262 @@
+{% extends 'base.html' %}{% load ui %}
+{% block title %}Caisse · Encaissements{% endblock %}
+{% block content %}
+{% include "workspaces/_header.html" with workspace_kicker="Workspace caisse · encaissements" workspace_title="Caisse & facturation" workspace_description="Encaissez les factures et suivez les montants à encaisser et encaissés." workspace_meta=today|date:"l d F Y" %}
+
+<section class="workspace-kpis">
+    <article class="workspace-kpi tone-green">
+        <div class="workspace-kpi-top">
+            <span class="workspace-kpi-icon">{% include "partials/sidebar_icon.html" with icon_name="payments" %}</span>
+            <span class="workspace-kpi-status">Aujourd’hui</span>
+        </div>
+        <small>Encaissé</small>
+        <strong>{{ collected_today|money }}</strong>
+        <p>{{ payment_count_today }} paiement(s)</p>
+    </article>
+    <article class="workspace-kpi tone-orange">
+        <div class="workspace-kpi-top">
+            <span class="workspace-kpi-icon">{% include "partials/sidebar_icon.html" with icon_name="invoices" %}</span>
+            <span class="workspace-kpi-status">À encaisser</span>
+        </div>
+        <small>Soldes ouverts</small>
+        <strong>{{ outstanding|money }}</strong>
+        <p>{{ pending_invoice_count }} facture(s) ouverte(s)</p>
+    </article>
+    <article class="workspace-kpi tone-blue">
+        <div class="workspace-kpi-top">
+            <span class="workspace-kpi-icon">{% include "partials/sidebar_icon.html" with icon_name="invoices" %}</span>
+            <span class="workspace-kpi-status">Facturation</span>
+        </div>
+        <small>Factures ouvertes</small>
+        <strong>{{ pending_invoice_count }}</strong>
+        <p>émises ou partiellement réglées</p>
+    </article>
+    <article class="workspace-kpi tone-dark">
+        <div class="workspace-kpi-top">
+            <span class="workspace-kpi-icon">{% include "partials/sidebar_icon.html" with icon_name="orders" %}</span>
+            <span class="workspace-kpi-status">Service</span>
+        </div>
+        <small>Additions à encaisser</small>
+        <strong>{{ additions|length }}</strong>
+        <p>commandes servies (restaurant & bar)</p>
+    </article>
+</section>
+
+<section class="workspace-grid">
+    <div class="workspace-main">
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">Encaissement</span>
+                <h2>Factures en attente</h2>
+                <p>Factures émises ou partiellement réglées, triées par date.</p>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Facture</th><th>Client</th><th>Total</th><th>Payé</th><th>Solde</th><th>Statut</th><th></th></tr></thead>
+                    <tbody>
+                        {% for invoice in pending_invoices %}
+                        <tr>
+                            <td><span class="record-title">{{ invoice.number }}</span><small class="muted">{{ invoice.issued_at|date:"d/m/Y H:i" }}</small></td>
+                            <td>{{ invoice.customer }}</td>
+                            <td>{{ invoice.total_amount|money }}</td>
+                            <td>{{ invoice.paid_amount|money }}</td>
+                            <td><strong>{{ invoice.balance|money }}</strong></td>
+                            <td><span class="{{ invoice.status|badge_class }}">{{ invoice.get_status_display }}</span></td>
+                            <td><a class="button button-small" href="{% url 'workspaces:payment_create' invoice.pk %}">Encaisser</a></td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="7" class="muted" style="padding:26px;text-align:center">Aucune facture en attente.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </article>
+
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">Restaurant & bar</span>
+                <h2>Additions à encaisser</h2>
+                <p>Commandes servies prêtes à être facturées et encaissées.</p>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Service</th><th>Commande</th><th>Client / table</th><th>Total</th><th>Facture</th><th></th></tr></thead>
+                    <tbody>
+                        {% for order in additions %}
+                        <tr>
+                            <td><span class="status-badge status-pill blue">{{ order.kind_label }}</span></td>
+                            <td><span class="record-title">#{{ order.pk }}</span></td>
+                            <td>{{ order.customer|default:"Client de passage" }} · {{ order.table|default:"—" }}</td>
+                            <td>{{ order.total_amount|money }}</td>
+                            <td>{% if order.invoice %}<span class="{{ order.invoice.status|badge_class }}">{{ order.invoice.number }}</span>{% else %}<span class="muted">À préparer</span>{% endif %}</td>
+                            <td class="desk-row-actions">
+                                {% if order.invoice %}
+                                <a class="button button-small" href="{% url 'workspaces:payment_create' order.invoice.pk %}">Encaisser</a>
+                                <a class="button button-small button-light" href="{% url 'reports:invoice_print' order.invoice.pk %}" target="_blank" rel="noopener">Facture</a>
+                                <a class="button button-small button-light" href="{% url 'reports:invoice_print' order.invoice.pk %}?ticket=1" target="_blank" rel="noopener">Ticket facture</a>
+                                {% else %}
+                                {% if order.kind == 'bar' %}
+                                <form method="post" action="{% url 'workspaces:cashier_prepare_bar_invoice' order.pk %}">{% csrf_token %}<button class="button button-small" type="submit">Préparer facture</button></form>
+                                {% else %}
+                                <form method="post" action="{% url 'workspaces:cashier_prepare_order_invoice' order.pk %}">{% csrf_token %}<button class="button button-small" type="submit">Préparer facture</button></form>
+                                {% endif %}
+                                {% endif %}
+                                <a class="button button-small button-light" href="{% url 'reports:order_print' order.kind order.pk %}" target="_blank" rel="noopener">Commande</a>
+                                <a class="button button-small button-light" href="{% url 'reports:order_print' order.kind order.pk %}?ticket=1" target="_blank" rel="noopener">Ticket commande</a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="6" class="muted" style="padding:26px;text-align:center">Aucune addition en attente.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </article>
+
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head" style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start">
+                <div>
+                    <span class="eyebrow">Registre</span>
+                    <h2>Toutes les factures</h2>
+                </div>
+                <form class="desk-search" method="get" style="margin:0;max-width:460px">
+                    <input type="search" name="q" value="{{ invoice_query }}" placeholder="Numéro ou client…">
+                    <select name="status">
+                        <option value="">Tous statuts</option>
+                        {% for value, label in invoice_statuses %}
+                        <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                    <button class="button button-light" type="submit">Filtrer</button>
+                </form>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Facture</th><th>Client</th><th>Émise le</th><th>Total</th><th>Solde</th><th>Statut</th><th></th></tr></thead>
+                    <tbody>
+                        {% for invoice in invoices %}
+                        <tr>
+                            <td><span class="record-title">{{ invoice.number }}</span></td>
+                            <td>{{ invoice.customer }}</td>
+                            <td>{{ invoice.issued_at|date:"d/m/Y" }}</td>
+                            <td>{{ invoice.total_amount|money }}</td>
+                            <td>{{ invoice.balance|money }}</td>
+                            <td><span class="{{ invoice.status|badge_class }}">{{ invoice.get_status_display }}</span></td>
+                            <td class="desk-row-actions">
+                                {% if invoice.is_payable %}<a class="button button-small" href="{% url 'workspaces:payment_create' invoice.pk %}">Encaisser</a>{% endif %}
+                                <a class="button button-small button-light" href="/module/finance/invoice/{{ invoice.pk }}/">Détail</a>
+                                <a class="button button-small button-light" href="/reports/documents/invoice/{{ invoice.pk }}/print/" target="_blank" rel="noopener">Imprimer</a>
+                                <a class="button button-small button-light" href="/reports/documents/invoice/{{ invoice.pk }}/pdf/">PDF</a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="7" class="muted" style="padding:26px;text-align:center">Aucune facture ne correspond au filtre.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% if invoices.has_other_pages %}
+            <div class="pagination">
+                {% if invoices.has_previous %}<a class="button button-small button-light" href="?page={{ invoices.previous_page_number }}{% if invoice_query %}&q={{ invoice_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}">Précédent</a>{% endif %}
+                <span class="muted">Page {{ invoices.number }} / {{ invoices.paginator.num_pages }}</span>
+                {% if invoices.has_next %}<a class="button button-small button-light" href="?page={{ invoices.next_page_number }}{% if invoice_query %}&q={{ invoice_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}">Suivant</a>{% endif %}
+            </div>
+            {% endif %}
+        </article>
+
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">Paiements</span>
+                <h2>Derniers encaissements</h2>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Reçu</th><th>Facture</th><th>Client</th><th>Moyen</th><th>Montant</th><th>Caissier</th><th>Date</th><th></th></tr></thead>
+                    <tbody>
+                        {% for payment in recent_payments %}
+                        <tr>
+                            <td><span class="record-title">#{{ payment.pk }}</span></td>
+                            <td>{{ payment.invoice.number }}</td>
+                            <td>{{ payment.invoice.customer }}</td>
+                            <td>{{ payment.method.name }}</td>
+                            <td>{{ payment.amount|money }}</td>
+                            <td>{{ payment.received_by }}</td>
+                            <td>{{ payment.paid_at|date:"d/m H:i" }}</td>
+                            <td class="desk-row-actions">
+                                <a class="button button-small button-light" href="{% url 'workspaces:payment_receipt' payment.pk %}">Reçu</a>
+                                <a class="button button-small button-light" href="{% url 'reports:receipt_print' payment.pk %}?ticket=1" target="_blank" rel="noopener">Ticket reçu</a>
+                                <a class="button button-small button-light" href="/reports/documents/receipt/{{ payment.pk }}/pdf/">PDF</a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="8" class="muted" style="padding:26px;text-align:center">Aucun paiement enregistré.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </article>
+    </div>
+
+    <aside class="workspace-side">
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">Synthèse</span>
+                <h2>Montants à suivre</h2>
+                <p>Vue rapide des soldes ouverts et des encaissements du jour.</p>
+            </div>
+            <div class="overview-stat-grid">
+                <div class="overview-stat tone-orange">
+                    <span>À encaisser</span>
+                    <strong>{{ outstanding|money }}</strong>
+                    <small>solde restant</small>
+                </div>
+                <div class="overview-stat tone-green">
+                    <span>Encaissé aujourd’hui</span>
+                    <strong>{{ collected_today|money }}</strong>
+                    <small>{{ payment_count_today }} paiement(s)</small>
+                </div>
+            </div>
+        </article>
+
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">Aujourd’hui</span>
+                <h2>Répartition par moyen</h2>
+            </div>
+            <div class="overview-list">
+                {% for row in payments_by_method %}
+                <div class="overview-row" style="cursor:default">
+                    <div>
+                        <strong>{{ row.method__name }}</strong>
+                        <small>{{ row.count }} paiement(s)</small>
+                    </div>
+                    <span class="record-title">{{ row.total|money }}</span>
+                </div>
+                {% empty %}
+                <p class="overview-empty muted">Aucun paiement aujourd’hui.</p>
+                {% endfor %}
+            </div>
+        </article>
+
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">Moyens de paiement</span>
+                <h2>Actifs</h2>
+            </div>
+            <div class="overview-list">
+                {% for method in payment_methods %}
+                <div class="overview-row" style="cursor:default">
+                    <div>
+                        <strong>{{ method.name }}</strong>
+                        <small>Disponible à l’encaissement</small>
+                    </div>
+                    <span class="status-badge status-success">Actif</span>
+                </div>
+                {% empty %}
+                <p class="overview-empty muted">Aucun moyen de paiement actif.</p>
+                {% endfor %}
+            </div>
+        </article>
+    </aside>
+</section>
+{% endblock %}

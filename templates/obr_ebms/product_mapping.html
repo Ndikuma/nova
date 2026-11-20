@@ -1,0 +1,41 @@
+{% extends 'base.html' %}{% load ui %}
+{% block title %}Classer {{ product.name }}{% endblock %}
+{% block content %}
+<section class="page-head">
+    <div>
+        <div class="breadcrumbs">
+            <a href="/">Accueil</a> / <a href="{% url 'obr_ebms:dashboard' %}">OBR eBMS</a> /
+            <a href="{% url 'obr_ebms:products' %}">Produits</a> / {{ product.name }}
+        </div>
+        <span class="eyebrow">Classification fiscale</span>
+        <h2>{{ product.name }}</h2>
+        <p>Référence {{ product.sku }} · {{ product.category|default:"Sans catégorie" }} · prix de vente {{ product.selling_price|money }}</p>
+    </div>
+    <a class="button button-light" href="{% url 'obr_ebms:products' %}">Retour</a>
+</section>
+
+<form method="post" class="card form-card">
+    {% csrf_token %}
+    {% if form.errors %}
+    <div class="alert" role="alert"><strong>Certains champs nécessitent votre attention.</strong>{{ form.non_field_errors }}</div>
+    {% endif %}
+    <div class="form-grid">
+        {% for field in form %}
+        <label class="field-group{% if field.errors %} has-error{% endif %}" for="{{ field.id_for_label }}">
+            <span class="field-label">{{ field.label }}{% if field.field.required %} <span class="required-mark">*</span>{% endif %}</span>
+            {{ field }}
+            {% if field.help_text %}<small class="field-help">{{ field.help_text }}</small>{% endif %}
+            {% if field.errors %}<small class="field-error">{{ field.errors|striptags }}</small>{% endif %}
+        </label>
+        {% endfor %}
+    </div>
+    <div class="actions" style="margin-top:22px">
+        <button class="button" type="submit">Enregistrer la classification</button>
+        <a class="button button-light" href="{% url 'obr_ebms:products' %}">Annuler</a>
+    </div>
+</form>
+
+{% if mapping.verified_by %}
+<p class="muted" style="margin-top:12px">Dernière vérification : {{ mapping.verified_at|date:"d/m/Y H:i" }} par {{ mapping.verified_by }}.</p>
+{% endif %}
+{% endblock %}

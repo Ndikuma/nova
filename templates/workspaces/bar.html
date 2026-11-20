@@ -1,0 +1,240 @@
+{% extends 'base.html' %}{% load ui %}
+{% block title %}Bar · Service comptoir{% endblock %}
+{% block content %}
+{% include "workspaces/_header.html" with workspace_kicker="Workspace bar · service comptoir" workspace_title="Bar & commandes boissons" workspace_description="Gérez le comptoir, les tables du bar et les commandes de boissons jusqu’à l’addition." workspace_meta=today|date:"l d F Y" %}
+
+<section class="workspace-kpis">
+    <article class="workspace-kpi tone-green">
+        <div class="workspace-kpi-top">
+            <span class="workspace-kpi-icon">{% include "partials/sidebar_icon.html" with icon_name="bar" %}</span>
+            <span class="workspace-kpi-status">Comptoir</span>
+        </div>
+        <small>Tables disponibles</small>
+        <strong>{{ available_tables }}</strong>
+        <p>{{ occupied_tables }} table(s) occupée(s)</p>
+    </article>
+    <article class="workspace-kpi tone-blue">
+        <div class="workspace-kpi-top">
+            <span class="workspace-kpi-icon">{% include "partials/sidebar_icon.html" with icon_name="orders" %}</span>
+            <span class="workspace-kpi-status">Service</span>
+        </div>
+        <small>Commandes actives</small>
+        <strong>{{ active_orders|length }}</strong>
+        <p>{{ drink_count }} boisson(s) à la carte</p>
+    </article>
+    <article class="workspace-kpi tone-orange">
+        <div class="workspace-kpi-top">
+            <span class="workspace-kpi-icon">{% include "partials/sidebar_icon.html" with icon_name="check" %}</span>
+            <span class="workspace-kpi-status">Servi</span>
+        </div>
+        <small>Commandes servies</small>
+        <strong>{{ served_orders|length }}</strong>
+        <p>en attente d’addition</p>
+    </article>
+    <article class="workspace-kpi tone-danger">
+        <div class="workspace-kpi-top">
+            <span class="workspace-kpi-icon">{% include "partials/sidebar_icon.html" with icon_name="inventory" %}</span>
+            <span class="workspace-kpi-status">Stock</span>
+        </div>
+        <small>Alertes bar</small>
+        <strong>{{ low_stock_count }}</strong>
+        <p>{{ available_drinks }} boisson(s) disponible(s)</p>
+    </article>
+</section>
+
+<section class="workspace-grid">
+    <div class="workspace-main">
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head" style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start">
+                <div>
+                    <span class="eyebrow">Plan du bar</span>
+                    <h2>Tables & comptoir</h2>
+                </div>
+                <a class="button button-small" href="{% url 'workspaces:bar_order_create' %}">Nouvelle commande</a>
+            </div>
+            <div class="table-card-grid">
+                {% for table in tables %}
+                <article class="table-card status-{{ table.status|lower }}">
+                    <div class="table-card-top">
+                        <a class="table-card-name" href="{% url 'workspaces:bar_table_detail' table.pk %}">{{ table.name }}</a>
+                        <span class="status-badge {% if table.status == 'AVAILABLE' %}status-success{% elif table.status == 'OCCUPIED' %}status-pill blue{% else %}status-warning{% endif %}">{{ table.get_status_display }}</span>
+                    </div>
+                    <p class="muted">{{ table.capacity|default:"—" }} place(s)</p>
+                    {% if table.active_order %}
+                    <div class="table-card-order">
+                        <strong>#{{ table.active_order.pk }} · {{ table.active_order.get_status_display }}</strong>
+                        <small>{{ table.active_order.items.count }} boisson(s) · {{ table.active_order.total_amount|money }}</small>
+                    </div>
+                    <div class="desk-row-actions">
+                        <a class="button button-small button-light" href="{% url 'workspaces:bar_table_detail' table.pk %}">Fiche table</a>
+                        <a class="button button-small button-light" href="#bar-order-{{ table.active_order.pk }}">Voir la commande</a>
+                    </div>
+                    {% else %}
+                    <p class="table-card-idle">Table libre</p>
+                    <div class="desk-row-actions">
+                        <a class="button button-small button-light" href="{% url 'workspaces:bar_table_detail' table.pk %}">Fiche table</a>
+                        <a class="button button-small button-light" href="{% url 'workspaces:bar_order_create' %}?table={{ table.pk }}">Ouvrir une commande</a>
+                    </div>
+                    {% endif %}
+                </article>
+                {% empty %}
+                <p class="overview-empty muted">Aucune table de bar active.</p>
+                {% endfor %}
+            </div>
+        </article>
+
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">Commandes</span>
+                <h2>Commandes bar en cours</h2>
+            </div>
+            <div class="order-list">
+                {% for order in active_orders %}
+                <article class="order-card" id="bar-order-{{ order.pk }}">
+                    <header>
+                        <div>
+                            <strong>Commande bar #{{ order.pk }}{% if order.table %} · {{ order.table.name }}{% endif %}</strong>
+                            <small>{{ order.created_at|date:"d/m H:i" }} · {{ order.items.count }} boisson(s)</small>
+                        </div>
+                        <div class="order-card-head-actions">
+                            <span class="{{ order.status|badge_class }}">{{ order.get_status_display }}</span>
+                            <span class="record-title">{{ order.total_amount|money }}</span>
+                        </div>
+                    </header>
+                    <ul class="order-items">
+                        {% for item in order.items.all %}
+                        <li><span><b>{{ item.quantity }}×</b> {{ item.drink.name }}</span><em>{{ item.subtotal|money }}</em></li>
+                        {% endfor %}
+                    </ul>
+                    {% if order.notes %}<p class="order-note">{{ order.notes }}</p>{% endif %}
+                    <div class="order-card-footer">
+                        <div class="order-actions">
+                            <a class="button button-small button-light" href="{% url 'reports:order_print' 'bar' order.pk %}?ticket=1" target="_blank" rel="noopener">Ticket commande</a>
+                            {% if order.invoice %}
+                            <a class="button button-small button-light" href="{% url 'reports:invoice_print' order.invoice.pk %}?ticket=1" target="_blank" rel="noopener">Ticket facture</a>
+                            {% endif %}
+                            {% if order.status == 'OPEN' and not order.invoice %}
+                            <a class="button button-small button-light" href="{% url 'workspaces:bar_order_edit' order.pk %}">Modifier le brouillon</a>
+                            {% endif %}
+                            {% if order.status == 'OPEN' or order.status == 'CONFIRMED' %}
+                            <form method="post" action="{% url 'workspaces:bar_order_action' order.pk 'start' %}">
+                                {% csrf_token %}<button class="button button-small" type="submit">Commencer</button>
+                            </form>
+                            {% endif %}
+                            {% if order.status == 'PREPARING' %}
+                            <form method="post" action="{% url 'workspaces:bar_order_action' order.pk 'serve' %}">
+                                {% csrf_token %}<button class="button button-small" type="submit">Marquer servie</button>
+                            </form>
+                            {% endif %}
+                            {% if not order.invoice and order.status != 'OPEN' %}
+                            <form method="post" action="{% url 'workspaces:bar_request_bill' order.pk %}">
+                                {% csrf_token %}<button class="button button-small button-light" type="submit">Transmettre à la caisse</button>
+                            </form>
+                            {% elif order.invoice %}
+                            <span class="status-badge status-pill blue">Addition {{ order.invoice.number }}</span>
+                            {% endif %}
+                            {% if order.status != 'SERVED' and not order.invoice %}
+                            <form method="post" action="{% url 'workspaces:bar_order_action' order.pk 'cancel' %}">
+                                {% csrf_token %}<button class="button button-small button-light" type="submit">Annuler</button>
+                            </form>
+                            {% endif %}
+                        </div>
+                        {% if not order.customer and not order.invoice %}
+                        <form class="inline-customer-form" method="post" action="{% url 'workspaces:bar_attach_customer' order.pk %}">
+                            {% csrf_token %}
+                            <select name="customer" required>
+                                <option value="">Associer un client…</option>
+                                {% for customer in customers %}<option value="{{ customer.pk }}">{{ customer }}</option>{% endfor %}
+                            </select>
+                            <button class="button button-small button-light" type="submit">Associer</button>
+                        </form>
+                        {% else %}
+                        <p class="muted" style="margin:0;font-size:12px">{{ order.customer|default:"Client de passage" }}</p>
+                        {% endif %}
+                    </div>
+                </article>
+                {% empty %}
+                <p class="overview-empty muted">Aucune commande bar active.</p>
+                {% endfor %}
+            </div>
+        </article>
+    </div>
+
+    <aside class="workspace-side">
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">Carte</span>
+                <h2>Boissons</h2>
+                <p>{{ available_drinks }} disponible(s) sur {{ drink_count }}.</p>
+            </div>
+            <div class="overview-list">
+                {% for drink in drinks %}
+                <a class="overview-row" href="{% url 'workspaces:bar_order_create' %}">
+                    <div>
+                        <strong>{{ drink.name }}</strong>
+                        <small>{{ drink.category.name }} · {{ drink.selling_price|money }}</small>
+                    </div>
+                    <span class="status-badge {% if drink.available %}status-success{% else %}status-danger{% endif %}">{% if drink.available %}Disponible{% else %}Rupture{% endif %}</span>
+                </a>
+                {% empty %}
+                <p class="overview-empty muted">Aucune boisson configurée.</p>
+                {% endfor %}
+            </div>
+        </article>
+
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">Caisse</span>
+                <h2>Additions à encaisser</h2>
+            </div>
+            <div class="overview-list">
+                {% for order in invoiced_orders %}
+                <a class="overview-row" href="{% url 'workspaces:payment_create' order.invoice.pk %}">
+                    <div>
+                        <strong>{{ order.invoice.number }}</strong>
+                        <small>Commande bar #{{ order.pk }} · {{ order.invoice.balance|money }} restant</small>
+                    </div>
+                    <span class="{{ order.invoice.status|badge_class }}">{{ order.invoice.get_status_display }}</span>
+                </a>
+                {% empty %}
+                <p class="overview-empty muted">Aucune addition transmise.</p>
+                {% endfor %}
+            </div>
+        </article>
+
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">Stocks bar</span>
+                <h2>Signaler un besoin</h2>
+            </div>
+            <form method="post" action="{% url 'workspaces:bar_restock' %}" class="stack-form">
+                {% csrf_token %}
+                {% for field in restock_form %}
+                <label>{{ field.label }}{{ field }}{% if field.errors %}<small class="field-error">{{ field.errors|striptags }}</small>{% endif %}</label>
+                {% endfor %}
+                <button class="button" type="submit">Signaler le réapprovisionnement</button>
+            </form>
+        </article>
+
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">Alertes</span>
+                <h2>Stocks critiques</h2>
+            </div>
+            <div class="overview-list">
+                {% for stock in low_stocks %}
+                <a class="overview-row" href="/module/inventory/stock/{{ stock.pk }}/">
+                    <div>
+                        <strong>{{ stock.product.name }}</strong>
+                        <small>{{ stock.location.name }} · seuil {{ stock.product.minimum_stock }}</small>
+                    </div>
+                    <span class="status-badge {% if stock.quantity <= 0 %}status-danger{% else %}status-warning{% endif %}">{{ stock.quantity }}</span>
+                </a>
+                {% empty %}
+                <p class="overview-empty muted">Aucune alerte de stock.</p>
+                {% endfor %}
+            </div>
+        </article>
+    </aside>
+</section>
+{% endblock %}

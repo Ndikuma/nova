@@ -1,0 +1,47 @@
+{% extends 'base.html' %}{% load ui %}
+{% block title %}Configuration OBR eBMS{% endblock %}
+{% block content %}
+<section class="page-head">
+    <div>
+        <div class="breadcrumbs">
+            <a href="/">Accueil</a> / <a href="{% url 'obr_ebms:dashboard' %}">OBR eBMS</a> / Configuration
+        </div>
+        <span class="eyebrow">Paramètres fiscaux</span>
+        <h2>Configuration OBR eBMS</h2>
+        <p>Identifiants API, informations du contribuable et taux de taxe par défaut.</p>
+    </div>
+    <a class="button button-light" href="{% url 'obr_ebms:dashboard' %}">Retour</a>
+</section>
+
+<section class="alert" style="margin-bottom:18px">
+    <strong>Activation établissement :</strong>
+    <span class="status-badge {% if company_profile.obr_ebms_enabled %}status-success{% else %}status-neutral{% endif %}" style="margin-left:6px">
+        {% if company_profile.obr_ebms_enabled %}Activé par le super administrateur{% else %}Désactivé{% endif %}
+    </span>
+    <p style="margin-top:8px">L’utilisation d’OBR eBMS dépend du profil de l’établissement (réservé au super administrateur) <em>et</em> des paramètres de transmission ci-dessous.</p>
+</section>
+
+<form method="post" class="card form-card">
+    {% csrf_token %}
+    {% if form.errors %}
+    <div class="alert" role="alert" tabindex="-1" id="form-error-summary">
+        <strong>Certains champs nécessitent votre attention.</strong>
+        {{ form.non_field_errors }}
+    </div>
+    {% endif %}
+    <div class="form-grid">
+        {% for field in form %}
+        <label class="field-group{% if field.errors %} has-error{% endif %}" for="{{ field.id_for_label }}">
+            <span class="field-label">{{ field.label }}{% if field.field.required %} <span class="required-mark">*</span>{% endif %}</span>
+            {{ field }}
+            {% if field.help_text %}<small class="field-help">{{ field.help_text }}</small>{% endif %}
+            {% if field.errors %}<small class="field-error">{{ field.errors|striptags }}</small>{% endif %}
+        </label>
+        {% endfor %}
+    </div>
+    <div class="actions" style="margin-top:22px">
+        <button class="button" type="submit">Enregistrer la configuration</button>
+        <a class="button button-light" href="{% url 'obr_ebms:dashboard' %}">Annuler</a>
+    </div>
+</form>
+{% endblock %}

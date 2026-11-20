@@ -1,0 +1,201 @@
+{% extends 'base.html' %}{% load ui %}
+{% block title %}Bilan financier · Finance{% endblock %}
+{% block content %}
+{% url 'workspaces:finance_balance' as balance_url %}
+{% include "workspaces/_header.html" with workspace_kicker="Finance · superadmin & gérance" workspace_title="Bilan financier par activité" workspace_description="Filtrez par période pour suivre les encaissements Hôtel, Restaurant et Bar, les dépenses et le solde net de l’établissement." workspace_meta=period_label %}
+
+<section class="card workspace-panel" style="margin-bottom:20px">
+    <div class="workspace-panel-head">
+        <span class="eyebrow">Période</span>
+        <h2>Filtrer le bilan</h2>
+        <p>Choisissez une date de début et de fin pour calculer les montants sur la période sélectionnée.</p>
+    </div>
+    <form method="get" class="form-grid" style="align-items:end">
+        <label class="field-group">
+            <span class="field-label">Du</span>
+            <input class="text-input" type="date" name="date_from" value="{{ date_from|date:'Y-m-d' }}" required>
+        </label>
+        <label class="field-group">
+            <span class="field-label">Au</span>
+            <input class="text-input" type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}" required>
+        </label>
+        <div class="form-actions" style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="button" type="submit">Afficher le bilan</button>
+            <a class="button button-light" href="{{ balance_url }}">Ce mois</a>
+        </div>
+    </form>
+</section>
+
+<section class="workspace-kpis">
+    <article class="workspace-kpi tone-green">
+        <div class="workspace-kpi-top">
+            <span class="workspace-kpi-icon">{% include "partials/sidebar_icon.html" with icon_name="payments" %}</span>
+            <span class="workspace-kpi-status">Encaissé</span>
+        </div>
+        <small>Total sur la période</small>
+        <strong>{{ collected_total|money }}</strong>
+        <p>{{ payment_count }} paiement(s) · hôtel + restaurant + bar</p>
+    </article>
+    <article class="workspace-kpi tone-danger">
+        <div class="workspace-kpi-top">
+            <span class="workspace-kpi-icon">{% include "partials/sidebar_icon.html" with icon_name="payments" %}</span>
+            <span class="workspace-kpi-status">Dépenses</span>
+        </div>
+        <small>Total sur la période</small>
+        <strong>{{ expenses_total|money }}</strong>
+        <p>sorties enregistrées</p>
+    </article>
+    <article class="workspace-kpi {% if net_balance >= 0 %}tone-blue{% else %}tone-dark{% endif %}">
+        <div class="workspace-kpi-top">
+            <span class="workspace-kpi-icon">{% include "partials/sidebar_icon.html" with icon_name="analytics" %}</span>
+            <span class="workspace-kpi-status">Solde net</span>
+        </div>
+        <small>Encaissé − dépenses</small>
+        <strong>{{ net_balance|money }}</strong>
+        <p>résultat de la période sélectionnée</p>
+    </article>
+    <article class="workspace-kpi tone-orange">
+        <div class="workspace-kpi-top">
+            <span class="workspace-kpi-icon">{% include "partials/sidebar_icon.html" with icon_name="invoices" %}</span>
+            <span class="workspace-kpi-status">À encaisser</span>
+        </div>
+        <small>Soldes ouverts (actuel)</small>
+        <strong>{{ outstanding|money }}</strong>
+        <p>factures émises ou partiellement réglées</p>
+    </article>
+</section>
+
+<section class="workspace-split">
+    <article class="card workspace-panel">
+        <div class="workspace-panel-head">
+            <span class="eyebrow">Activités</span>
+            <h2>Encaissements par activité</h2>
+            <p>Répartition des paiements reçus sur la période, par département.</p>
+        </div>
+        <div class="overview-stat-grid">
+            {% for row in segment_rows %}
+            <div class="overview-stat {% if row.label == 'Hôtel' %}tone-blue{% elif row.label == 'Restaurant' %}tone-orange{% elif row.label == 'Bar' %}tone-green{% else %}tone-dark{% endif %}">
+                <span>{{ row.label }}</span>
+                <strong>{{ row.collected|money }}</strong>
+                <small>{{ row.count }} paiement(s)</small>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="table-wrap" style="margin-top:14px">
+            <table>
+                <thead><tr><th>Activité</th><th>Encaissements</th><th>Paiements</th><th>Part</th></tr></thead>
+                <tbody>
+                    {% for row in segment_rows %}
+                    <tr>
+                        <td><span class="record-title">{{ row.label }}</span></td>
+                        <td>{{ row.collected|money }}</td>
+                        <td>{{ row.count }}</td>
+                        <td>{% if collected_total %}{% widthratio row.collected collected_total 100 %}%{% else %}—{% endif %}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="4" class="muted" style="padding:22px;text-align:center">Aucun encaissement sur la période.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </article>
+
+    <article class="card workspace-panel">
+        <div class="workspace-panel-head">
+            <span class="eyebrow">Dépenses</span>
+            <h2>Répartition des dépenses</h2>
+            <p>Dépenses enregistrées sur la période, par catégorie.</p>
+        </div>
+        <div class="overview-list">
+            {% for row in expenses_by_category %}
+            <div class="overview-row" style="cursor:default">
+                <div>
+                    <strong>{{ row.category__name }}</strong>
+                    <small>{{ row.count }} dépense(s)</small>
+                </div>
+                <span class="record-title">{{ row.total|money }}</span>
+            </div>
+            {% empty %}
+            <p class="overview-empty muted">Aucune dépense sur la période.</p>
+            {% endfor %}
+        </div>
+        <div class="overview-stat-grid" style="margin-top:14px">
+            <div class="overview-stat tone-danger">
+                <span>Total dépenses</span>
+                <strong>{{ expenses_total|money }}</strong>
+                <small>période sélectionnée</small>
+            </div>
+            <div class="overview-stat {% if net_balance >= 0 %}tone-green{% else %}tone-dark{% endif %}">
+                <span>Solde net</span>
+                <strong>{{ net_balance|money }}</strong>
+                <small>encaissé − dépenses</small>
+            </div>
+        </div>
+    </article>
+</section>
+
+<section class="workspace-grid">
+    <div class="workspace-main">
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">Encaissements</span>
+                <h2>Paiements de la période</h2>
+                <p>Paiements reçus entre {{ date_from|date:"d/m/Y" }} et {{ date_to|date:"d/m/Y" }}.</p>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Date</th><th>Facture</th><th>Client</th><th>Moyen</th><th>Montant</th><th>Caissier</th></tr></thead>
+                    <tbody>
+                        {% for payment in recent_payments %}
+                        <tr>
+                            <td>{{ payment.paid_at|date:"d/m/Y H:i" }}</td>
+                            <td><a href="{% url 'workspaces:payment_receipt' payment.pk %}"><span class="record-title">{{ payment.invoice.number }}</span></a></td>
+                            <td>{{ payment.invoice.customer }}</td>
+                            <td>{{ payment.method.name }}</td>
+                            <td>{{ payment.amount|money }}</td>
+                            <td>{{ payment.received_by }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="6" class="muted" style="padding:24px;text-align:center">Aucun paiement sur la période.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% if payment_count > recent_payments|length %}
+            <p class="muted" style="padding:10px 14px 0">{{ payment_count }} paiement(s) au total sur la période (20 affichés).</p>
+            {% endif %}
+        </article>
+    </div>
+
+    <aside class="workspace-side">
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">Dépenses</span>
+                <h2>Dépenses de la période</h2>
+            </div>
+            <div class="overview-list">
+                {% for expense in recent_expenses %}
+                <div class="overview-row" style="cursor:default">
+                    <div>
+                        <strong>{{ expense.description }}</strong>
+                        <small>{{ expense.category.name }} · {{ expense.date|date:"d/m/Y" }}</small>
+                    </div>
+                    <span class="record-title">{{ expense.amount|money }}</span>
+                </div>
+                {% empty %}
+                <p class="overview-empty muted">Aucune dépense sur la période.</p>
+                {% endfor %}
+            </div>
+        </article>
+
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">Note</span>
+                <h2>Lecture du bilan</h2>
+            </div>
+            <p class="muted" style="margin:0 0 8px">Les encaissements sont calculés à partir des paiements reçus sur la période et ventilés par activité (Hôtel, Restaurant, Bar) selon la facture associée.</p>
+            <p class="muted" style="margin:0">Le solde net correspond aux encaissements moins les dépenses de la période. Le montant « À encaisser » indique le solde actuellement ouvert sur les factures, indépendamment de la période.</p>
+        </article>
+    </aside>
+</section>
+{% endblock %}

@@ -1,0 +1,140 @@
+{% extends 'base.html' %}{% load ui %}
+{% block title %}Chambre {{ room.number }} · Réception{% endblock %}
+{% block content %}
+<section class="page-head">
+    <div>
+        <div class="breadcrumbs"><a href="/">Accueil</a> / <a href="{% url 'workspaces:reception' %}">Réception</a> / Chambre {{ room.number }}</div>
+        <span class="eyebrow">Hôtel · fiche chambre</span>
+        <h2>Chambre {{ room.number }}</h2>
+        <p>{{ room.room_type.name }} · Étage {{ room.floor|default:"—" }} · Capacité {{ room.room_type.max_capacity|default:"—" }}</p>
+    </div>
+    <div class="page-actions">
+        <span class="status-badge {% if state == 'available' %}status-success{% elif state == 'occupied' %}status-pill blue{% elif state == 'cleaning' %}status-warning{% else %}status-danger{% endif %}">
+            {% if state == 'available' %}Disponible{% elif state == 'occupied' %}Occupée{% elif state == 'cleaning' %}À nettoyer{% elif state == 'maintenance' %}Maintenance{% else %}Hors service{% endif %}
+        </span>
+        <a class="button button-light" href="{% url 'workspaces:reception' %}">Retour réception</a>
+    </div>
+</section>
+
+<section class="workspace-split">
+    <article class="card workspace-panel">
+        <div class="workspace-panel-head">
+            <span class="eyebrow">Séjour / occupation en cours</span>
+            <h2>{% if current_reservation %}{{ current_reservation.customer }}{% else %}Aucun séjour en cours{% endif %}</h2>
+        </div>
+        {% if current_reservation %}
+        <div class="invoice-summary">
+            <div><span>Statut réservation</span><span class="{{ current_reservation.status|badge_class }}">{{ current_reservation.get_status_display }}</span></div>
+            <div><span>Arrivée</span><strong>{{ current_reservation.check_in|date:"d/m/Y" }}</strong></div>
+            <div><span>Départ</span><strong>{{ current_reservation.check_out|date:"d/m/Y" }}</strong></div>
+            <div><span>Montant estimé</span><strong>{{ current_reservation.estimated_total|money }}</strong></div>
+        </div>
+        {% if current_invoice %}
+        <div class="invoice-summary" style="margin-top:12px">
+            <div><span>Facture</span><strong>{{ current_invoice.number }}</strong></div>
+            <div><span>Total</span><strong>{{ current_invoice.total_amount|money }}</strong></div>
+            <div><span>Payé</span><strong>{{ current_invoice.paid_amount|money }}</strong></div>
+            <div><span>Solde</span><strong class="{% if current_invoice.balance > 0 %}is-due{% endif %}">{{ current_invoice.balance|money }}</strong></div>
+            <div><span>Statut paiement</span><span class="{{ current_invoice.status|badge_class }}">{{ current_invoice.get_status_display }}</span></div>
+        </div>
+        <div class="desk-row-actions" style="margin-top:12px;flex-wrap:wrap">
+            <a class="button button-small button-light" href="{% url 'reports:invoice_print' current_invoice.pk %}" target="_blank" rel="noopener">Imprimer facture</a>
+            <a class="button button-small button-light" href="{% url 'reports:invoice_pdf' current_invoice.pk %}">PDF</a>
+            {% if current_invoice.balance > 0 and can_collect %}
+            <a class="button button-small" href="{% url 'workspaces:payment_create' current_invoice.pk %}">Encaisser</a>
+            {% endif %}
+            <a class="button button-small button-light" href="/module/hotel/reservation/{{ current_reservation.pk }}/">Dossier réservation</a>
+        </div>
+        {% else %}
+        <p class="muted" style="margin-top:8px">Aucune facture liée pour ce séjour.</p>
+        <div class="desk-row-actions" style="margin-top:12px;flex-wrap:wrap">
+            <a class="button button-small button-light" href="/module/hotel/reservation/{{ current_reservation.pk }}/">Dossier réservation</a>
+            {% if current_reservation.status == 'CHECKED_IN' %}
+            <form method="post" action="{% url 'workspaces:reservation_prepare_checkout' current_reservation.pk %}">{% csrf_token %}<button class="button button-small button-light" type="submit">Préparer facture</button></form>
+            {% endif %}
+        </div>
+        {% endif %}
+        {% if active_stay %}
+        <p class="muted" style="margin-top:10px;font-size:12px">Séjour actif depuis {{ active_stay.actual_check_in|date:"d/m/Y H:i" }}{% if active_stay.responsible_receptionist %} · {{ active_stay.responsible_receptionist }}{% endif %}</p>
+        {% endif %}
+        {% else %}
+        <p class="overview-empty muted">La chambre est libre ou sans séjour actif enregistré.</p>
+        {% if state == 'available' %}
+        <a class="button" href="{% url 'workspaces:reservation_create' %}?room={{ room.pk }}">Créer une réservation</a>
+        {% endif %}
+        {% endif %}
+    </article>
+
+    <article class="card workspace-panel">
+        <div class="workspace-panel-head">
+            <span class="eyebrow">À venir</span>
+            <h2>Prochaines réservations</h2>
+        </div>
+        <div class="overview-list">
+            {% for reservation in next_reservations %}
+            <div class="overview-row" style="cursor:default;align-items:flex-start">
+                <div>
+                    <strong>{{ reservation.customer }}</strong>
+                    <small>{{ reservation.check_in|date:"d/m/Y" }} → {{ reservation.check_out|date:"d/m/Y" }} · {{ reservation.estimated_total|money }}</small>
+                    {% if reservation.invoice %}
+                    <small>Facture {{ reservation.invoice.number }} · solde {{ reservation.invoice.balance|money }} · <span class="{{ reservation.invoice.status|badge_class }}">{{ reservation.invoice.get_status_display }}</span></small>
+                    {% else %}
+                    <small>Facture : non préparée</small>
+                    {% endif %}
+                </div>
+                <span class="{{ reservation.status|badge_class }}">{{ reservation.get_status_display }}</span>
+            </div>
+            {% empty %}
+            <p class="overview-empty muted">Aucune réservation à venir.</p>
+            {% endfor %}
+        </div>
+    </article>
+</section>
+
+<section class="workspace-split">
+    <article class="card workspace-panel">
+        <div class="workspace-panel-head">
+            <span class="eyebrow">Historique</span>
+            <h2>Réservations & paiements</h2>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Client</th><th>Séjour</th><th>Statut</th><th>Facture</th><th>Payé / Solde</th></tr></thead>
+                <tbody>
+                    {% for reservation in recent_reservations %}
+                    <tr>
+                        <td><a class="record-title" href="/module/hotel/reservation/{{ reservation.pk }}/">{{ reservation.customer }}</a></td>
+                        <td>{{ reservation.check_in|date:"d/m/Y" }} → {{ reservation.check_out|date:"d/m/Y" }}</td>
+                        <td><span class="{{ reservation.status|badge_class }}">{{ reservation.get_status_display }}</span></td>
+                        <td>{% if reservation.invoice %}{{ reservation.invoice.number }} <span class="{{ reservation.invoice.status|badge_class }}">{{ reservation.invoice.get_status_display }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+                        <td>{% if reservation.invoice %}{{ reservation.invoice.paid_amount|money }} / <strong>{{ reservation.invoice.balance|money }}</strong>{% else %}<span class="muted">—</span>{% endif %}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="5" class="muted" style="padding:20px;text-align:center">Aucun historique.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </article>
+
+    <article class="card workspace-panel">
+        <div class="workspace-panel-head">
+            <span class="eyebrow">Ménage & maintenance</span>
+            <h2>Tâches récentes</h2>
+        </div>
+        <div class="overview-list">
+            {% for task in housekeeping_tasks %}
+            <div class="overview-row" style="cursor:default">
+                <div>
+                    <strong>{{ task.get_task_type_display }}</strong>
+                    <small>{{ task.scheduled_date|date:"d/m/Y" }}{% if task.assigned_to %} · {{ task.assigned_to }}{% endif %}</small>
+                </div>
+                <span class="{{ task.status|badge_class }}">{{ task.get_status_display }}</span>
+            </div>
+            {% empty %}
+            <p class="overview-empty muted">Aucune tâche enregistrée.</p>
+            {% endfor %}
+        </div>
+    </article>
+</section>
+{% endblock %}

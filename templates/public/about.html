@@ -1,0 +1,18 @@
+{% extends 'public/base.html' %}{% load static %}
+{% block title %}À propos · {{ company.name }}{% endblock %}
+{% block content %}
+<section class="pub-container pub-menu-hero">
+    <div class="pub-menu-hero-copy">
+        <h1>À propos de {{ company.name }}</h1>
+        <div class="pub-about-copy">{{ company.public_about|default:company.public_description|linebreaks }}</div>
+        <a class="pub-button" href="{% url 'public_home' %}#recherche">Préparer mon séjour</a>
+    </div>
+    <img src="{% static 'images/hospitality-terrace.webp' %}" width="1536" height="864" alt="">
+</section>
+<section class="pub-container pub-about-links" aria-label="Découvrir l’établissement">
+    <a class="pub-link" href="{% url 'public_home' %}#chambres">Nos chambres <span aria-hidden="true">↗</span></a>
+    <a class="pub-link" href="{% url 'public_menu' %}">Carte du restaurant <span aria-hidden="true">↗</span></a>
+    <a class="pub-link" href="{% url 'public_bar' %}">Carte du bar <span aria-hidden="true">↗</span></a>
+    {% if company.contact_line or company.address or company.whatsapp_url %}<a class="pub-link" href="#contact">Nous contacter <span aria-hidden="true">↓</span></a>{% endif %}
+</section>
+{% endblock %}

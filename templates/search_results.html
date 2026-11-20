@@ -1,0 +1,63 @@
+{% extends 'base.html' %}{% block title %}Recherche{% endblock %}
+{% block content %}
+<section class="page-head">
+    <div>
+        <span class="eyebrow">Système</span>
+        <h2>Recherche globale</h2>
+        <p>Recherchez un client, une réservation, une chambre, une facture, un produit ou un article de menu.</p>
+    </div>
+</section>
+
+<section class="card" style="padding:16px 18px">
+    <form method="get" class="table-search" style="max-width:640px">
+        <input type="text" name="q" value="{{ query }}" placeholder="Nom, chambre, facture, référence…" autofocus>
+        <button class="button" type="submit">Rechercher</button>
+        {% if query %}<a class="button button-light" href="{% url 'search' %}">Effacer</a>{% endif %}
+    </form>
+</section>
+
+{% if query %}
+<p class="muted" style="margin:4px 0 16px">{{ result_count }} résultat{{ result_count|pluralize }} pour « {{ query }} ».</p>
+
+{% if groups %}
+<div class="search-results">
+    {% for group in groups %}
+    <section class="card search-group">
+        <div class="table-header">
+            <div style="display:flex;align-items:center;gap:10px">
+                <span class="icon-pill">{% include "partials/sidebar_icon.html" with icon_name=group.icon %}</span>
+                <div>
+                    <span class="eyebrow">{{ group.title|upper }}</span>
+                    <h3>{{ group.items|length }} résultat{{ group.items|length|pluralize }}</h3>
+                </div>
+            </div>
+        </div>
+        {% for item in group.items %}
+        <a class="search-result-row" href="{{ item.url }}">
+            <span>
+                <span class="record-title">{{ item.label }}</span>
+                <span class="record-meta">{{ item.meta }}</span>
+            </span>
+            <span class="button button-light button-small">Ouvrir</span>
+        </a>
+        {% endfor %}
+    </section>
+    {% endfor %}
+</div>
+{% else %}
+<section class="card">
+    <div class="empty-state">
+        <h3>Aucun résultat</h3>
+        <p>Essayez un autre terme ou vérifiez l’orthographe.</p>
+    </div>
+</section>
+{% endif %}
+{% else %}
+<section class="card">
+    <div class="empty-state">
+        <h3>Que recherchez-vous ?</h3>
+        <p>Saisissez un nom, un numéro de chambre, une référence de facture ou un produit.</p>
+    </div>
+</section>
+{% endif %}
+{% endblock %}

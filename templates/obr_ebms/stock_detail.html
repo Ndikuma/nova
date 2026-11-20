@@ -1,0 +1,55 @@
+{% extends 'base.html' %}{% load ui %}
+{% block title %}Mouvement OBR #{{ record.pk }}{% endblock %}
+{% block content %}
+<section class="page-head">
+    <div>
+        <div class="breadcrumbs">
+            <a href="/">Accueil</a> / <a href="{% url 'obr_ebms:dashboard' %}">OBR eBMS</a> /
+            <a href="{% url 'obr_ebms:stock' %}">Stock</a> / #{{ record.pk }}
+        </div>
+        <span class="eyebrow">Mouvement de stock</span>
+        <h2>{{ record.get_movement_type_display }} <span class="{{ record.status|badge_class }}">{{ record.get_status_display }}</span></h2>
+        <p>{{ record.stock_movement.product.name }} · {{ record.stock_movement.location.name }} · {{ record.movement_date|date:"d/m/Y à H:i" }}</p>
+    </div>
+    <a class="button button-light" href="{% url 'obr_ebms:stock' %}">Retour</a>
+</section>
+
+<section class="grid grid-split">
+    <article class="card" style="padding:18px">
+        <div class="workspace-panel-head" style="padding:0 0 10px;border:0">
+            <span class="eyebrow">Déclaration</span>
+            <h3>Détails du mouvement</h3>
+        </div>
+        <div class="overview-list">
+            <div class="overview-row"><div><strong>Produit</strong><small>{{ record.stock_movement.product.name }} ({{ record.stock_movement.product.sku }})</small></div></div>
+            <div class="overview-row"><div><strong>Emplacement</strong><small>{{ record.stock_movement.location.name }}</small></div></div>
+            <div class="overview-row"><div><strong>Quantité</strong><small>{{ record.stock_movement.quantity }}</small></div></div>
+            <div class="overview-row"><div><strong>Description</strong><small>{{ record.description|default:"—" }}</small></div></div>
+            <div class="overview-row"><div><strong>Facture liée</strong><small>{{ record.invoice_reference|default:"—" }}</small></div></div>
+            <div class="overview-row"><div><strong>Tentatives</strong><small>{{ record.attempt_count }} · dernière le {{ record.last_attempt|date:"d/m/Y H:i"|default:"—" }}</small></div></div>
+        </div>
+        {% if record.error_message %}
+        <div class="alert" role="alert" style="margin-top:12px"><strong>Dernière erreur</strong><p>{{ record.error_message }}</p></div>
+        {% endif %}
+        {% if can_write %}
+        <div class="actions" style="margin-top:14px">
+            <form method="post" action="{% url 'obr_ebms:stock_action' record.pk 'prepare' %}">{% csrf_token %}
+                <button class="button button-light button-small" type="submit">Régénérer</button>
+            </form>
+            <form method="post" action="{% url 'obr_ebms:stock_action' record.pk 'send' %}">{% csrf_token %}
+                <button class="button button-small" type="submit">Transmettre à OBR</button>
+            </form>
+        </div>
+        {% endif %}
+    </article>
+    <article class="card" style="padding:16px">
+        <strong>Réponse OBR</strong>
+        <pre style="white-space:pre-wrap;font-size:11px;max-height:360px;overflow:auto">{{ record.response_payload|pprint }}</pre>
+    </article>
+</section>
+
+<section class="card" style="padding:16px;margin-top:16px">
+    <strong>Payload envoyé</strong>
+    <pre style="white-space:pre-wrap;font-size:11px;max-height:320px;overflow:auto">{{ record.request_payload|pprint }}</pre>
+</section>
+{% endblock %}

@@ -1,0 +1,109 @@
+{% extends 'base.html' %}{% load ui %}{% block title %}{{ label }} · {{ config.title }}{% endblock %}
+{% block content %}
+<section class="page-head">
+    <div>
+        <div class="breadcrumbs">
+            <a href="/">Accueil</a> / <a href="{% url 'module_home' module %}">{{ config.title }}</a> / {{ label }}
+        </div>
+        <span class="eyebrow">{{ config.title|upper }}</span>
+        <h2>{{ label }}</h2>
+        {% if not managed_order %}<p>Gérez les enregistrements et ouvrez une ligne pour consulter le détail, modifier ou lancer un workflow.</p>{% endif %}
+    </div>
+    {% if can_create %}<a class="button" href="{% url 'entity_create' module entity %}">{% if managed_order %}Nouvelle commande{% elif stock_balance %}Enregistrer un mouvement{% elif posting_title %}{{ posting_title }}{% else %}+ Ajouter{% endif %}</a>{% endif %}
+</section>
+
+<section class="card table-card">
+    <div class="table-toolbar">
+        <form method="get" class="table-search">
+            <input type="text" name="q" value="{{ query }}" placeholder="Rechercher dans {{ label|lower }}…">
+            <button class="button button-light" type="submit">Rechercher</button>
+            {% if query %}<a class="button button-light" href="?">Effacer</a>{% endif %}
+        </form>
+        <span class="toolbar-note">{{ total_count }} enregistrement{{ total_count|pluralize }}</span>
+    </div>
+
+    {% if rows %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Enregistrement</th>
+                    {% for field in fields %}<th>{{ field.name|field_label }}</th>{% endfor %}
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                <tr>
+                    <td><a class="record-title" href="{% url 'entity_detail' module entity row.object.pk %}">{{ row.object }}</a></td>
+                    {% for cell in row.cells %}
+                    <td>
+                        {% if cell.is_status and cell.raw %}
+                        <span class="{{ cell.raw|badge_class }}">{{ cell.value }}</span>
+                        {% elif cell.is_datetime %}
+                        {{ cell.value|date:"d/m/Y H:i" }}
+                        {% elif cell.is_date %}
+                        {{ cell.value|date:"d/m/Y" }}
+                        {% else %}
+                        {{ cell.value|truncatechars:60 }}
+                        {% endif %}
+                    </td>
+                    {% endfor %}
+                    <td>
+                        <div class="record-actions">
+                            <a class="action-icon-btn" href="{% url 'entity_detail' module entity row.object.pk %}" title="Voir" aria-label="Voir">
+                                <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                            </a>
+                            {% if printable_document == 'invoice' %}
+                            <a class="action-icon-btn" href="{% url 'reports:invoice_print' row.object.pk %}" target="_blank" rel="noopener" title="Imprimer" aria-label="Imprimer">
+                                <svg viewBox="0 0 24 24"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                            </a>
+                            {% elif printable_document == 'receipt' %}
+                            <a class="action-icon-btn" href="{% url 'reports:receipt_print' row.object.pk %}" target="_blank" rel="noopener" title="Imprimer le reçu" aria-label="Imprimer le reçu">
+                                <svg viewBox="0 0 24 24"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                            </a>
+                            {% elif order_print_kind %}
+                            <a class="action-icon-btn" href="{% url 'reports:order_print' order_print_kind row.object.pk %}" target="_blank" rel="noopener" title="Imprimer la commande" aria-label="Imprimer la commande">
+                                <svg viewBox="0 0 24 24"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                            </a>
+                            {% endif %}
+                            {% if not managed_order and not row.posted_record or can_compose_order and row.object.status == 'OPEN' %}
+                            <a class="action-icon-btn" href="{% url 'entity_edit' module entity row.object.pk %}" title="Modifier" aria-label="Modifier">
+                                <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                            </a>
+                            {% endif %}
+                            {% if not managed_order and not row.posted_record %}
+                            <a class="action-icon-btn action-icon-danger" href="{% url 'entity_delete' module entity row.object.pk %}" title="Supprimer" aria-label="Supprimer">
+                                <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                            </a>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if page_obj.paginator.num_pages > 1 %}
+    <div class="pagination-bar">
+        <span>Page {{ page_obj.number }} sur {{ page_obj.paginator.num_pages }}</span>
+        <div class="pagination-actions">
+            {% if page_obj.has_previous %}
+            <a class="button button-light button-small" href="?page={{ page_obj.previous_page_number }}{% if query %}&q={{ query|urlencode }}{% endif %}">← Précédent</a>
+            {% endif %}
+            <span class="pagination-current">{{ page_obj.number }}</span>
+            {% if page_obj.has_next %}
+            <a class="button button-light button-small" href="?page={{ page_obj.next_page_number }}{% if query %}&q={{ query|urlencode }}{% endif %}">Suivant →</a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+    {% else %}
+    <div class="empty-state">
+        <h3>Aucun enregistrement{% if query %} pour « {{ query }} »{% endif %}</h3>
+        {% if query %}<p>Essayez un autre terme ou effacez la recherche.</p>{% elif not managed_order %}<p>Ajoutez le premier élément pour commencer.</p>{% endif %}
+    </div>
+    {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,256 @@
+{% extends 'base.html' %}{% load ui %}
+{% block title %}Cuisine · KDS{% endblock %}
+{% block content %}
+{% include "workspaces/_header.html" with workspace_kicker="Workspace cuisine · kitchen display system" workspace_title="Production & commandes en cuisine" workspace_description="Suivez les commandes de la salle, faites avancer leur préparation et signalez les ruptures de stock." workspace_meta="Rafraîchissement automatique toutes les 60 secondes" %}
+
+<section class="workspace-kpis">
+    <article class="workspace-kpi tone-blue">
+        <div class="workspace-kpi-top">
+            <span class="workspace-kpi-icon">{% include "partials/sidebar_icon.html" with icon_name="orders" %}</span>
+            <span class="workspace-kpi-status">À lancer</span>
+        </div>
+        <small>Nouvelles commandes</small>
+        <strong>{{ new_orders|length }}</strong>
+        <p>en attente de prise en charge</p>
+    </article>
+    <article class="workspace-kpi tone-orange">
+        <div class="workspace-kpi-top">
+            <span class="workspace-kpi-icon">{% include "partials/sidebar_icon.html" with icon_name="restaurant" %}</span>
+            <span class="workspace-kpi-status">En cours</span>
+        </div>
+        <small>En préparation</small>
+        <strong>{{ preparing_orders|length }}</strong>
+        <p>plats en cours de réalisation</p>
+    </article>
+    <article class="workspace-kpi tone-green">
+        <div class="workspace-kpi-top">
+            <span class="workspace-kpi-icon">{% include "partials/sidebar_icon.html" with icon_name="check" %}</span>
+            <span class="workspace-kpi-status">Prêt</span>
+        </div>
+        <small>Commandes prêtes</small>
+        <strong>{{ ready_orders|length }}</strong>
+        <p>à retirer par le service</p>
+    </article>
+    <article class="workspace-kpi tone-danger">
+        <div class="workspace-kpi-top">
+            <span class="workspace-kpi-icon">{% include "partials/sidebar_icon.html" with icon_name="inventory" %}</span>
+            <span class="workspace-kpi-status">Stock</span>
+        </div>
+        <small>Ruptures / seuils</small>
+        <strong>{{ low_stock_count }}</strong>
+        <p>{{ unavailable_items }} plat(s) indisponible(s)</p>
+    </article>
+</section>
+
+<section class="kds-board" data-kds-board>
+    <div class="kds-column kds-new">
+        <div class="kds-column-head">
+            <span class="eyebrow">À lancer</span>
+            <b>{{ new_orders|length }}</b>
+        </div>
+        {% for order in new_orders %}
+        <article class="kds-ticket" data-order="{{ order.pk }}">
+            <header>
+                <div>
+                    <strong>#{{ order.pk }}{% if order.table %} · {{ order.table.name }}{% endif %}</strong>
+                    <small>{{ order.get_source_display }} · {{ order.created_at|date:"H:i" }}</small>
+                </div>
+                <span class="kds-age {% if order.waiting_minutes >= 20 %}is-late{% elif order.waiting_minutes >= 10 %}is-warm{% endif %}">{{ order.waiting_minutes }} min</span>
+            </header>
+            <ul class="kds-items">
+                {% for item in order.items.all %}
+                <li><b>{{ item.quantity }}×</b> {{ item.menu_item.name }}{% if item.notes %}<em>{{ item.notes }}</em>{% endif %}</li>
+                {% endfor %}
+            </ul>
+            {% if order.notes %}<p class="kds-note">{{ order.notes }}</p>{% endif %}
+            <div class="kds-actions">
+                <form method="post" action="{% url 'workspaces:service_order_action' order.pk 'start' %}">
+                    {% csrf_token %}<button class="button button-small" type="submit">Démarrer</button>
+                </form>
+                <form method="post" action="{% url 'workspaces:service_order_action' order.pk 'cancel' %}">
+                    {% csrf_token %}<button class="button button-small button-light" type="submit">Annuler</button>
+                </form>
+            </div>
+        </article>
+        {% empty %}
+        <p class="kds-empty">Aucune nouvelle commande.</p>
+        {% endfor %}
+    </div>
+
+    <div class="kds-column kds-preparing">
+        <div class="kds-column-head">
+            <span class="eyebrow">En préparation</span>
+            <b>{{ preparing_orders|length }}</b>
+        </div>
+        {% for order in preparing_orders %}
+        <article class="kds-ticket" data-order="{{ order.pk }}">
+            <header>
+                <div>
+                    <strong>#{{ order.pk }}{% if order.table %} · {{ order.table.name }}{% endif %}</strong>
+                    <small>{{ order.get_source_display }} · {{ order.created_at|date:"H:i" }}</small>
+                </div>
+                <span class="kds-age {% if order.waiting_minutes >= 30 %}is-late{% elif order.waiting_minutes >= 15 %}is-warm{% endif %}">{{ order.waiting_minutes }} min</span>
+            </header>
+            <ul class="kds-items">
+                {% for item in order.items.all %}
+                <li><b>{{ item.quantity }}×</b> {{ item.menu_item.name }}{% if item.notes %}<em>{{ item.notes }}</em>{% endif %}</li>
+                {% endfor %}
+            </ul>
+            {% if order.notes %}<p class="kds-note">{{ order.notes }}</p>{% endif %}
+            <div class="kds-actions">
+                <form method="post" action="{% url 'workspaces:service_order_action' order.pk 'ready' %}">
+                    {% csrf_token %}<button class="button button-small" type="submit">Marquer prête</button>
+                </form>
+            </div>
+        </article>
+        {% empty %}
+        <p class="kds-empty">Aucune commande en préparation.</p>
+        {% endfor %}
+    </div>
+
+    <div class="kds-column kds-ready">
+        <div class="kds-column-head">
+            <span class="eyebrow">Prêtes</span>
+            <b>{{ ready_orders|length }}</b>
+        </div>
+        {% for order in ready_orders %}
+        <article class="kds-ticket" data-order="{{ order.pk }}">
+            <header>
+                <div>
+                    <strong>#{{ order.pk }}{% if order.table %} · {{ order.table.name }}{% endif %}</strong>
+                    <small>{{ order.get_source_display }} · {{ order.created_at|date:"H:i" }}</small>
+                </div>
+                <span class="kds-age is-ready">Prête</span>
+            </header>
+            <ul class="kds-items">
+                {% for item in order.items.all %}
+                <li><b>{{ item.quantity }}×</b> {{ item.menu_item.name }}{% if item.notes %}<em>{{ item.notes }}</em>{% endif %}</li>
+                {% endfor %}
+            </ul>
+            <p class="kds-note">En attente du service en salle.</p>
+        </article>
+        {% empty %}
+        <p class="kds-empty">Aucune commande prête.</p>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="workspace-grid">
+    <div class="workspace-main">
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">Carte</span>
+                <h2>Disponibilité des plats</h2>
+                <p>{{ available_items }} disponible(s) · {{ unavailable_items }} indisponible(s).</p>
+            </div>
+            <div class="menu-availability">
+                {% regroup menu_items by category as category_groups %}
+                {% for group in category_groups %}
+                <div class="menu-group">
+                    <h3>{{ group.grouper|default:"Autres" }}</h3>
+                    {% for item in group.list %}
+                    <div class="menu-row">
+                        <div>
+                            <strong>{{ item.name }}</strong>
+                            <small>{{ item.selling_price|money }}{% if item.recipe %} · recette {{ item.recipe.name }}{% endif %}</small>
+                        </div>
+                        <form method="post" action="{% url 'workspaces:menu_item_toggle' item.pk %}">
+                            {% csrf_token %}
+                            <button class="status-badge {% if item.available %}status-success{% else %}status-danger{% endif %}" type="submit">
+                                {% if item.available %}Disponible{% else %}Indisponible{% endif %}
+                            </button>
+                        </form>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% empty %}
+                <p class="overview-empty muted">Aucun plat configuré.</p>
+                {% endfor %}
+            </div>
+        </article>
+
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">Historique</span>
+                <h2>Dernières commandes servies</h2>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Commande</th><th>Table</th><th>Client</th><th>Articles</th><th>Total</th><th>Statut</th></tr></thead>
+                    <tbody>
+                        {% for order in history %}
+                        <tr>
+                            <td><span class="record-title">#{{ order.pk }}</span></td>
+                            <td>{{ order.table|default:"—" }}</td>
+                            <td>{{ order.customer|default:"—" }}</td>
+                            <td>{{ order.items.count }}</td>
+                            <td>{{ order.total_amount|money }}</td>
+                            <td><span class="{{ order.status|badge_class }}">{{ order.get_status_display }}</span></td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="6" class="muted" style="padding:24px;text-align:center">Aucune commande terminée.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </article>
+    </div>
+
+    <aside class="workspace-side">
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">Stocks cuisine</span>
+                <h2>Signaler un besoin</h2>
+                <p>La demande est transmise à l’inventaire via le journal d’audit.</p>
+            </div>
+            <form method="post" action="{% url 'workspaces:kitchen_restock' %}" class="stack-form">
+                {% csrf_token %}
+                {% for field in restock_form %}
+                <label>{{ field.label }}{{ field }}{% if field.errors %}<small class="field-error">{{ field.errors|striptags }}</small>{% endif %}</label>
+                {% endfor %}
+                <button class="button" type="submit">Signaler le réapprovisionnement</button>
+            </form>
+        </article>
+
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">Alertes</span>
+                <h2>Stocks à surveiller</h2>
+            </div>
+            <div class="overview-list">
+                {% for stock in low_stocks %}
+                <a class="overview-row" href="/module/inventory/stock/{{ stock.pk }}/">
+                    <div>
+                        <strong>{{ stock.product.name }}</strong>
+                        <small>{{ stock.location.name }} · seuil {{ stock.product.minimum_stock }}</small>
+                    </div>
+                    <span class="status-badge {% if stock.quantity <= 0 %}status-danger{% else %}status-warning{% endif %}">{{ stock.quantity }}</span>
+                </a>
+                {% empty %}
+                <p class="overview-empty muted">Aucune alerte de stock.</p>
+                {% endfor %}
+            </div>
+        </article>
+
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">Mouvements</span>
+                <h2>Derniers mouvements</h2>
+            </div>
+            <div class="overview-list">
+                {% for movement in movements %}
+                <div class="overview-row" style="cursor:default">
+                    <div>
+                        <strong>{{ movement.product.name }}</strong>
+                        <small>{{ movement.get_movement_type_display }} · {{ movement.location.name }} · {{ movement.date|date:"d/m H:i" }}</small>
+                    </div>
+                    <span class="record-title">{{ movement.quantity }}</span>
+                </div>
+                {% empty %}
+                <p class="overview-empty muted">Aucun mouvement de stock.</p>
+                {% endfor %}
+            </div>
+        </article>
+    </aside>
+</section>
+{% endblock %}

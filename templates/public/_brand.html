@@ -1,0 +1,6 @@
+<a class="pub-brand" href="{% url 'public_home' %}">
+    <span class="pub-brand-mark" aria-hidden="true">
+        {% if company.logo_url %}<img src="{{ company.logo_url }}" alt="">{% else %}{{ company.initials }}{% endif %}
+    </span>
+    <span>{{ company.name }}</span>
+</a>

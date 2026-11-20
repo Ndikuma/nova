@@ -1,0 +1,57 @@
+{% extends 'base.html' %}{% load ui %}
+{% block title %}Factures OBR eBMS{% endblock %}
+{% block content %}
+<section class="page-head">
+    <div>
+        <div class="breadcrumbs"><a href="/">Accueil</a> / <a href="{% url 'obr_ebms:dashboard' %}">OBR eBMS</a> / Factures</div>
+        <span class="eyebrow">Transmissions</span>
+        <h2>Factures OBR eBMS</h2>
+        <p>Payloads générés depuis les factures {{ company.short_name }} et statut de transmission.</p>
+    </div>
+</section>
+
+<form method="get" class="card" style="padding:14px;margin-bottom:16px;display:flex;gap:10px;flex-wrap:wrap;align-items:end">
+    <label class="field-group" style="flex:1 1 260px">
+        <span class="field-label">Rechercher</span>
+        <input class="text-input" type="search" name="q" value="{{ query }}" placeholder="N° facture, identifiant ou client">
+    </label>
+    <label class="field-group" style="flex:0 1 220px">
+        <span class="field-label">Statut</span>
+        <select class="select-input" name="status">
+            <option value="">Tous</option>
+            {% for value, label in status_choices %}
+            <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+    </label>
+    <button class="button" type="submit">Filtrer</button>
+    <a class="button button-light" href="{% url 'obr_ebms:invoices' %}">Réinitialiser</a>
+</form>
+
+<section class="card table-card">
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr><th>Facture</th><th>Identifiant</th><th>Client</th><th>Date</th><th>Statut</th><th class="num">Total</th><th>N° OBR</th><th>Tentatives</th><th></th></tr>
+            </thead>
+            <tbody>
+                {% for record in invoices %}
+                <tr>
+                    <td><a href="{% url 'obr_ebms:invoice_detail' record.pk %}">{{ record.invoice_number }}</a></td>
+                    <td>{{ record.invoice_identifier }}</td>
+                    <td>{{ record.customer_name }}</td>
+                    <td>{{ record.invoice_date|date:"d/m/Y H:i" }}</td>
+                    <td><span class="{{ record.status|badge_class }}">{{ record.get_status_display }}</span></td>
+                    <td class="num">{{ record.total_amount|money }}</td>
+                    <td>{{ record.obr_registered_number|default:"—" }}</td>
+                    <td>{{ record.attempt_count }}</td>
+                    <td><a class="button button-light button-small" href="{% url 'obr_ebms:invoice_detail' record.pk %}">Détail</a></td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="9" class="empty-state">Aucune facture eBMS enregistrée.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

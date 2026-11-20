@@ -1,0 +1,127 @@
+{% extends 'base.html' %}{% load ui %}
+{% block title %}Facture {{ record.invoice_number }} · OBR{% endblock %}
+{% block content %}
+<section class="page-head">
+    <div>
+        <div class="breadcrumbs">
+            <a href="/">Accueil</a> / <a href="{% url 'obr_ebms:dashboard' %}">OBR eBMS</a> /
+            <a href="{% url 'obr_ebms:invoices' %}">Factures</a> / {{ record.invoice_number }}
+        </div>
+        <span class="eyebrow">Facture électronique</span>
+        <h2>{{ record.invoice_number }} <span class="{{ record.status|badge_class }}">{{ record.get_status_display }}</span></h2>
+        <p>{{ record.invoice_identifier }} · {{ record.get_invoice_type_display }} · émise le {{ record.invoice_date|date:"d/m/Y à H:i" }}</p>
+    </div>
+    <a class="button button-light" href="{% url 'obr_ebms:invoices' %}">Retour</a>
+</section>
+
+<section class="grid grid-split">
+    <article class="card" style="padding:18px">
+        <div class="workspace-panel-head" style="padding:0 0 10px;border:0">
+            <span class="eyebrow">Lignes déclarées</span>
+            <h3>Détail fiscal</h3>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Désignation</th><th>Code</th><th class="num">Qté</th><th class="num">P.U.</th><th class="num">TVA</th><th class="num">Total</th></tr></thead>
+                <tbody>
+                    {% for item in record.items.all %}
+                    <tr>
+                        <td>{{ item.designation }}</td>
+                        <td>{{ item.item_code }}</td>
+                        <td class="num">{{ item.quantity }} {{ item.measurement_unit }}</td>
+                        <td class="num">{{ item.item_price|money }}</td>
+                        <td class="num">{{ item.vat|money }}</td>
+                        <td class="num">{{ item.total_amount|money }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="6" class="empty-state">Aucune ligne.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="doc-totals ebms-totals">
+            <div><span>Client</span><strong>{{ record.customer_name }}</strong></div>
+            <div><span>NIF client</span><strong>{{ record.customer_tin|default:"—" }}</strong></div>
+            <div><span>Devise</span><strong>{{ record.currency }}</strong></div>
+            <div class="grand"><span>Total déclaré</span><strong>{{ record.total_amount|money }}</strong></div>
+        </div>
+    </article>
+
+    <article class="card" style="padding:18px">
+        <div class="workspace-panel-head" style="padding:0 0 10px;border:0">
+            <span class="eyebrow">Transmission</span>
+            <h3>Actions OBR</h3>
+        </div>
+        <div class="overview-list">
+            <div class="overview-row"><div><strong>N° OBR</strong><small>{{ record.obr_registered_number|default:"Non enregistré" }}</small></div></div>
+            <div class="overview-row"><div><strong>Enregistré le</strong><small>{{ record.obr_registered_date|date:"d/m/Y H:i"|default:"—" }}</small></div></div>
+            <div class="overview-row"><div><strong>Tentatives</strong><small>{{ record.attempt_count }} · dernière le {{ record.last_attempt|date:"d/m/Y H:i"|default:"—" }}</small></div></div>
+            <div class="overview-row"><div><strong>Envoyé le</strong><small>{{ record.sent_at|date:"d/m/Y H:i"|default:"—" }}</small></div></div>
+        </div>
+
+        {% if record.error_message %}
+        <div class="alert" role="alert" style="margin-top:12px"><strong>Dernière erreur</strong><p>{{ record.error_message }}</p></div>
+        {% endif %}
+
+        {% if can_write %}
+        <div class="actions" style="margin-top:14px;flex-wrap:wrap">
+            <form method="post" action="{% url 'obr_ebms:invoice_action' record.pk 'prepare' %}">{% csrf_token %}
+                <button class="button button-light button-small" type="submit">Régénérer</button>
+            </form>
+            <form method="post" action="{% url 'obr_ebms:invoice_action' record.pk 'send' %}">{% csrf_token %}
+                <button class="button button-small" type="submit">Transmettre à OBR</button>
+            </form>
+            {% if record.status == 'sent' %}
+            <button class="button button-light button-small" type="button" data-dialog-open="cancel-dialog">Annuler la facture</button>
+            {% endif %}
+        </div>
+        {% endif %}
+    </article>
+</section>
+
+<section class="grid grid-split grid-split-even" style="margin-top:16px">
+    <article class="card" style="padding:16px">
+        <strong>Payload envoyé</strong>
+        <pre style="white-space:pre-wrap;font-size:11px;max-height:320px;overflow:auto">{{ record.request_payload|pprint }}</pre>
+    </article>
+    <article class="card" style="padding:16px">
+        <strong>Réponse OBR</strong>
+        <pre style="white-space:pre-wrap;font-size:11px;max-height:320px;overflow:auto">{{ record.response_payload|pprint }}</pre>
+    </article>
+</section>
+
+{% if can_write and record.status == 'sent' %}
+<dialog class="desk-dialog" id="cancel-dialog">
+    <form method="post" action="{% url 'obr_ebms:invoice_action' record.pk 'cancel' %}">
+        {% csrf_token %}
+        <h3>Annuler la facture {{ record.invoice_number }}</h3>
+        <label class="field-group">
+            <span class="field-label">Motif transmis à OBR</span>
+            {{ cancel_form.motif }}
+        </label>
+        <div class="actions" style="margin-top:14px">
+            <button class="button" type="submit">Confirmer l’annulation</button>
+            <button class="button button-light" type="button" data-dialog-close>Fermer</button>
+        </div>
+    </form>
+</dialog>
+{% endif %}
+{% endblock %}
+{% block extra_js %}
+<script>
+(function () {
+    document.querySelectorAll('[data-dialog-open]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            var dialog = document.getElementById(button.dataset.dialogOpen);
+            if (dialog && dialog.showModal) dialog.showModal();
+        });
+    });
+    document.querySelectorAll('[data-dialog-close]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            var dialog = button.closest('dialog');
+            if (dialog) dialog.close();
+        });
+    });
+})();
+</script>
+{% endblock %}

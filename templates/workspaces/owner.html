@@ -1,0 +1,361 @@
+{% extends 'base.html' %}{% load ui %}
+{% block title %}Pilotage · Gérant{% endblock %}
+{% block content %}
+{% include "workspaces/_header.html" with workspace_kicker="Gérance · hôtel & restaurant" workspace_title="Vue consolidée de l’établissement" workspace_description="Pilotez les performances et intervenez directement dans les opérations de l’hôtel, du restaurant et du bar." workspace_meta="Hôtel · restaurant · bar · finance · inventaire" workspace_actions=owner_actions %}
+
+<section class="workspace-kpis">
+    <article class="workspace-kpi tone-blue">
+        <div class="workspace-kpi-top">
+            <span class="workspace-kpi-icon">{% include "partials/sidebar_icon.html" with icon_name="analytics" %}</span>
+            <span class="workspace-kpi-status">Chiffre d’affaires</span>
+        </div>
+        <small>Activité enregistrée</small>
+        <strong>{{ activity_revenue|money }}</strong>
+        <p>hôtel + restaurant + bar</p>
+    </article>
+    <article class="workspace-kpi tone-green">
+        <div class="workspace-kpi-top">
+            <span class="workspace-kpi-icon">{% include "partials/sidebar_icon.html" with icon_name="payments" %}</span>
+            <span class="workspace-kpi-status">Encaissé</span>
+        </div>
+        <small>Paiements reçus</small>
+        <strong>{{ collected|money }}</strong>
+        <p>cumul des encaissements</p>
+    </article>
+    <article class="workspace-kpi tone-orange">
+        <div class="workspace-kpi-top">
+            <span class="workspace-kpi-icon">{% include "partials/sidebar_icon.html" with icon_name="invoices" %}</span>
+            <span class="workspace-kpi-status">À encaisser</span>
+        </div>
+        <small>Soldes ouverts</small>
+        <strong>{{ outstanding|money }}</strong>
+        <p>factures émises ou partielles</p>
+    </article>
+    <article class="workspace-kpi tone-dark">
+        <div class="workspace-kpi-top">
+            <span class="workspace-kpi-icon">{% include "partials/sidebar_icon.html" with icon_name="star" %}</span>
+            <span class="workspace-kpi-status">Bénéfice estimé</span>
+        </div>
+        <small>Activité − dépenses</small>
+        <strong>{{ estimated_profit|money }}</strong>
+        <p>dépenses {{ expenses_total|money }}</p>
+    </article>
+</section>
+
+<section class="workspace-split">
+    <article class="card workspace-panel">
+        <div class="workspace-panel-head">
+            <span class="eyebrow">Revenus</span>
+            <h2>Répartition par activité</h2>
+            <p>Contribution de chaque département au chiffre d’affaires enregistré.</p>
+        </div>
+        <div class="overview-stat-grid">
+            <div class="overview-stat tone-blue">
+                <span>Hôtel</span>
+                <strong>{{ hotel_revenue|money }}</strong>
+                <small>séjours et réservations</small>
+            </div>
+            <div class="overview-stat tone-orange">
+                <span>Restaurant</span>
+                <strong>{{ restaurant_revenue|money }}</strong>
+                <small>commandes en salle et takeaway</small>
+            </div>
+            <div class="overview-stat tone-green">
+                <span>Bar</span>
+                <strong>{{ bar_revenue|money }}</strong>
+                <small>boissons et service comptoir</small>
+            </div>
+            <div class="overview-stat tone-dark">
+                <span>Occupation</span>
+                <strong>{{ occupancy_rate }}%</strong>
+                <small>{{ occupied_rooms }} / {{ rooms_total }} chambre(s)</small>
+            </div>
+        </div>
+    </article>
+
+    <article class="card workspace-panel">
+        <div class="workspace-panel-head">
+            <span class="eyebrow">Trésorerie</span>
+            <h2>Encaissements & suivi</h2>
+            <p>Montants déjà encaissés et soldes restant à recouvrer.</p>
+        </div>
+        <div class="overview-stat-grid">
+            <div class="overview-stat tone-green">
+                <span>Encaissé</span>
+                <strong>{{ collected|money }}</strong>
+                <small>paiements reçus</small>
+            </div>
+            <div class="overview-stat tone-orange">
+                <span>À encaisser</span>
+                <strong>{{ outstanding|money }}</strong>
+                <small>soldes factures</small>
+            </div>
+            <div class="overview-stat tone-blue">
+                <span>Commandes</span>
+                <strong>{{ orders_volume }}</strong>
+                <small>restaurant + bar</small>
+            </div>
+            <div class="overview-stat tone-danger">
+                <span>Stocks à surveiller</span>
+                <strong>{{ low_stock_count }}</strong>
+                <small>{{ supplier_count }} fournisseur(s)</small>
+            </div>
+        </div>
+    </article>
+</section>
+
+<section class="workspace-grid">
+    <div class="workspace-main">
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">Hôtel</span>
+                <h2>Performances de la réception</h2>
+                <p>Réservations récentes et activité des séjours.</p>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Client</th><th>Chambre</th><th>Séjour</th><th>Montant</th><th>Statut</th></tr></thead>
+                    <tbody>
+                        {% for reservation in recent_reservations %}
+                        <tr>
+                            <td><span class="record-title">{{ reservation.customer }}</span></td>
+                            <td>{{ reservation.room }}</td>
+                            <td>{{ reservation.check_in|date:"d/m" }} → {{ reservation.check_out|date:"d/m" }}</td>
+                            <td>{{ reservation.estimated_total|money }}</td>
+                            <td><span class="{{ reservation.status|badge_class }}">{{ reservation.get_status_display }}</span></td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="5" class="muted" style="padding:24px;text-align:center">Aucune réservation enregistrée.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </article>
+
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">Restaurant</span>
+                <h2>Articles les plus vendus</h2>
+                <p>Plats et boissons les plus consommés.</p>
+            </div>
+            <div class="overview-list">
+                {% for dish in top_dishes %}
+                <div class="overview-row" style="cursor:default">
+                    <div>
+                        <strong>{{ dish.menu_item__name }}</strong>
+                        <small>{{ dish.sold }} vendu(s)</small>
+                    </div>
+                    <span class="record-title">{{ dish.revenue|money }}</span>
+                </div>
+                {% empty %}
+                <p class="overview-empty muted">Aucune vente de plat enregistrée.</p>
+                {% endfor %}
+            </div>
+        </article>
+
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">Salle</span>
+                <h2>Performance des tables</h2>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Table</th><th>Commandes</th><th>Revenus</th></tr></thead>
+                    <tbody>
+                        {% for row in table_performance %}
+                        <tr>
+                            <td><span class="record-title">{{ row.table__name }}</span></td>
+                            <td>{{ row.orders }}</td>
+                            <td>{{ row.revenue|money }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="3" class="muted" style="padding:24px;text-align:center">Aucune commande associée à une table.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </article>
+
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">Bar</span>
+                <h2>Produits les plus consommés</h2>
+            </div>
+            <div class="overview-list">
+                {% for drink in top_drinks %}
+                <div class="overview-row" style="cursor:default">
+                    <div>
+                        <strong>{{ drink.drink__name }}</strong>
+                        <small>{{ drink.sold }} servi(s)</small>
+                    </div>
+                    <span class="record-title">{{ drink.revenue|money }}</span>
+                </div>
+                {% empty %}
+                <p class="overview-empty muted">Aucune vente de boisson enregistrée.</p>
+                {% endfor %}
+            </div>
+        </article>
+
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">Finance</span>
+                <h2>Factures, paiements et dépenses</h2>
+                <p>Dernières opérations financières de l’établissement.</p>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Facture</th><th>Client</th><th>Total</th><th>Solde</th><th>Statut</th></tr></thead>
+                    <tbody>
+                        {% for invoice in recent_invoices %}
+                        <tr>
+                            <td><span class="record-title">{{ invoice.number }}</span></td>
+                            <td>{{ invoice.customer }}</td>
+                            <td>{{ invoice.total_amount|money }}</td>
+                            <td>{{ invoice.balance|money }}</td>
+                            <td><span class="{{ invoice.status|badge_class }}">{{ invoice.get_status_display }}</span></td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="5" class="muted" style="padding:24px;text-align:center">Aucune facture enregistrée.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </article>
+    </div>
+
+    <aside class="workspace-side">
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">Management</span>
+                <h2>Contrôle des opérations</h2>
+                <p>Accédez aux espaces de travail et agissez avec les mêmes droits que les équipes.</p>
+            </div>
+            <div class="overview-list">
+                <a class="overview-row" href="{% url 'workspaces:reception' %}">
+                    <div>
+                        <strong>Réception · hôtel</strong>
+                        <small>Réservations, arrivées, départs et ménage</small>
+                    </div>
+                    <span class="status-badge status-pill blue">Ouvrir</span>
+                </a>
+                <a class="overview-row" href="{% url 'workspaces:kitchen' %}">
+                    <div>
+                        <strong>Cuisine · restaurant</strong>
+                        <small>Commandes, production et stocks cuisine</small>
+                    </div>
+                    <span class="status-badge status-pill blue">Ouvrir</span>
+                </a>
+                <a class="overview-row" href="{% url 'workspaces:service' %}">
+                    <div>
+                        <strong>Service en salle</strong>
+                        <small>Tables, commandes et suivi du service</small>
+                    </div>
+                    <span class="status-badge status-pill blue">Ouvrir</span>
+                </a>
+                <a class="overview-row" href="{% url 'workspaces:bar' %}">
+                    <div>
+                        <strong>Bar</strong>
+                        <small>Comptoir, boissons et commandes du bar</small>
+                    </div>
+                    <span class="status-badge status-pill blue">Ouvrir</span>
+                </a>
+                <a class="overview-row" href="{% url 'workspaces:finance_balance' %}">
+                    <div>
+                        <strong>Bilan financier</strong>
+                        <small>Encaissements Hôtel, Restaurant, Bar et dépenses par période</small>
+                    </div>
+                    <span class="status-badge status-pill blue">Ouvrir</span>
+                </a>
+                <a class="overview-row" href="{% url 'workspaces:cashier' %}">
+                    <div>
+                        <strong>Caisse</strong>
+                        <small>Encaissements, factures et suivi des montants</small>
+                    </div>
+                    <span class="status-badge status-pill blue">Ouvrir</span>
+                </a>
+            </div>
+        </article>
+
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">Encaissements</span>
+                <h2>Derniers paiements</h2>
+            </div>
+            <div class="overview-list">
+                {% for payment in recent_payments %}
+                <a class="overview-row" href="{% url 'workspaces:payment_receipt' payment.pk %}">
+                    <div>
+                        <strong>{{ payment.invoice.number }}</strong>
+                        <small>{{ payment.method.name }} · {{ payment.paid_at|date:"d/m H:i" }}</small>
+                    </div>
+                    <span class="record-title">{{ payment.amount|money }}</span>
+                </a>
+                {% empty %}
+                <p class="overview-empty muted">Aucun paiement enregistré.</p>
+                {% endfor %}
+            </div>
+        </article>
+
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">Dépenses</span>
+                <h2>Dernières sorties</h2>
+            </div>
+            <div class="overview-list">
+                {% for expense in recent_expenses %}
+                <div class="overview-row" style="cursor:default">
+                    <div>
+                        <strong>{{ expense.description }}</strong>
+                        <small>{{ expense.category.name }} · {{ expense.date|date:"d/m/Y" }}</small>
+                    </div>
+                    <span class="record-title">{{ expense.amount|money }}</span>
+                </div>
+                {% empty %}
+                <p class="overview-empty muted">Aucune dépense enregistrée.</p>
+                {% endfor %}
+            </div>
+        </article>
+
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">Inventaire</span>
+                <h2>Alertes de stock</h2>
+            </div>
+            <div class="overview-list">
+                {% for stock in low_stock %}
+                <a class="overview-row" href="/module/inventory/stock/{{ stock.pk }}/">
+                    <div>
+                        <strong>{{ stock.product.name }}</strong>
+                        <small>{{ stock.location.name }} · seuil {{ stock.product.minimum_stock }}</small>
+                    </div>
+                    <span class="status-badge {% if stock.quantity <= 0 %}status-danger{% else %}status-warning{% endif %}">{{ stock.quantity }}</span>
+                </a>
+                {% empty %}
+                <p class="overview-empty muted">Tous les stocks sont au-dessus du seuil.</p>
+                {% endfor %}
+            </div>
+        </article>
+
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">Achats</span>
+                <h2>Bons de commande</h2>
+                <p>{{ pending_purchases }} en cours · {{ supplier_count }} fournisseur(s)</p>
+            </div>
+            <div class="overview-list">
+                {% for order in purchase_orders %}
+                <a class="overview-row" href="/module/inventory/purchaseorder/{{ order.pk }}/">
+                    <div>
+                        <strong>#{{ order.pk }} · {{ order.supplier.name }}</strong>
+                        <small>{{ order.order_date|date:"d/m/Y" }} · {{ order.total_amount|money }}</small>
+                    </div>
+                    <span class="status-badge status-pill blue">{{ order.status }}</span>
+                </a>
+                {% empty %}
+                <p class="overview-empty muted">Aucun bon de commande.</p>
+                {% endfor %}
+            </div>
+        </article>
+    </aside>
+</section>
+{% endblock %}

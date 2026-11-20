@@ -1,0 +1,73 @@
+{% extends 'print/base.html' %}{% load ui %}
+{% block title %}Reçu {{ payment.pk }}{% endblock %}
+{% block toolbar_title %}Reçu de paiement #{{ payment.pk }}{% endblock %}
+{% block toolbar_actions %}
+<a class="btn" href="{% url 'reports:receipt_pdf' payment.pk %}">Télécharger le PDF</a>
+<a class="btn" href="{% url 'reports:receipt_print' payment.pk %}?ticket=1">Ticket POS</a>
+{% endblock %}
+{% block document_footer %}{{ brand.receipt_footer }}{% endblock %}
+{% block doc_meta %}
+<h1>REÇU DE PAIEMENT</h1>
+<span>Reçu #{{ payment.pk }}</span>
+<span>{{ payment.paid_at|date:"d/m/Y à H:i" }}</span>
+<span class="status">{% if payment.status == 'COMPLETED' %}Complété{% else %}{{ payment.status }}{% endif %}</span>
+{% endblock %}
+{% block content %}
+<section class="doc-info">
+    <div>
+        <span>Reçu / facture</span>
+        <strong>Reçu #{{ payment.pk }} · {{ invoice.number }}</strong>
+        <small>Facture émise le {{ invoice.issued_at|date:"d/m/Y" }}</small>
+        <small>Statut facture : {{ invoice.get_status_display }}</small>
+    </div>
+    <div>
+        <span>Client</span>
+        <strong>{{ invoice.customer }}</strong>
+        <small>{{ invoice.customer.phone|default:"—" }}</small>
+        {% if invoice.notes %}<small>Origine : {{ invoice.notes|truncatechars:80 }}</small>{% endif %}
+    </div>
+    <div>
+        <span>Encaissement</span>
+        <strong>{{ payment.method.name }}</strong>
+        <small>Reçu par {{ payment.received_by }}</small>
+        <small>{{ payment.paid_at|date:"d/m/Y H:i" }}</small>
+    </div>
+</section>
+
+<div class="doc-table-wrap" tabindex="0" role="region" aria-label="Lignes du reçu">
+    <table>
+        <thead>
+            <tr><th>Désignation</th><th class="num">Qté</th><th class="num">P.U.</th><th class="num">Total</th></tr>
+        </thead>
+        <tbody>
+            {% for line in lines %}
+            <tr>
+                <td>{{ line.item.description }}</td>
+                <td class="num">{{ line.item.quantity }}</td>
+                <td class="num">{{ line.item.unit_price|money }}</td>
+                <td class="num">{{ line.line_total|money }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4" class="empty">Aucune ligne.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="doc-totals">
+    <div><span>Total facture</span><strong>{{ invoice.total_amount|money }}</strong></div>
+    <div><span>Total payé (facture)</span><strong>{{ invoice.paid_amount|money }}</strong></div>
+    <div><span>Solde restant</span><strong>{{ invoice.balance|money }}</strong></div>
+    <div class="grand"><span>Montant encaissé (ce reçu)</span><strong>{{ payment.amount|money }}</strong></div>
+</div>
+
+{% if payment.reference %}
+<p style="margin-top:14px;color:var(--muted)">Référence de paiement : <strong>{{ payment.reference }}</strong></p>
+{% endif %}
+<p style="margin-top:10px;color:var(--muted);font-size:11.5px">Document à présenter à la caisse ou conserver comme justificatif de paiement.</p>
+
+<div class="signatures">
+    <div class="signature">Signature du client</div>
+    <div class="signature">Signature du caissier</div>
+</div>
+{% endblock %}

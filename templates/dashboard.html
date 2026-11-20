@@ -1,0 +1,282 @@
+{% extends 'base.html' %}{% load ui %}{% block title %}Vue d’ensemble{% endblock %}
+{% block content %}
+<section class="workspace-head">
+    <div>
+        <span class="eyebrow">Centre de pilotage · {{ today|date:"l j F Y" }}</span>
+        <h1>Bonjour, {{ request.user.first_name|default:request.user.username }}.</h1>
+        <p>Voici l’activité de votre établissement en temps réel.</p>
+    </div>
+    <div class="workspace-head-actions">
+        {% for action in quick_actions %}
+        <a class="button{% if not forloop.first %} button-light{% endif %}" href="{{ action.url }}">+ {{ action.label }}</a>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="card health-card health-{{ health.status }}">
+    <div class="health-main">
+        <span class="health-icon">{% include "partials/sidebar_icon.html" with icon_name="dashboard" %}</span>
+        <div>
+            <span class="eyebrow">Santé générale de l’établissement</span>
+            <h2>{{ health.label }}</h2>
+            <p>Indicateurs consolidés sur les stocks, le ménage et les encaissements.</p>
+        </div>
+        <div class="health-score"><strong>{{ health.score }}</strong><span>/100</span></div>
+    </div>
+    <div class="health-checks">
+        {% for item in health.items %}
+        <div class="health-check {% if item.ok %}is-ok{% else %}is-warning{% endif %}">
+            <span class="health-dot"></span>
+            <div><strong>{{ item.label }}</strong><small>{{ item.detail }}</small></div>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="workspace-kpis">
+    {% if 'hotel' in allowed_modules %}
+    <article class="workspace-kpi tone-green">
+        <div class="workspace-kpi-top">
+            <span class="workspace-kpi-icon">{% include "partials/sidebar_icon.html" with icon_name="bed" %}</span>
+            <span class="workspace-kpi-status">Disponibilité</span>
+        </div>
+        <small>Chambres disponibles</small>
+        <strong>{{ counts.available_rooms }}<span class="muted" style="font-size:14px;font-weight:500"> / {{ counts.rooms }}</span></strong>
+        <p>{{ occupancy_rate }}% d’occupation · {{ counts.occupied_rooms }} chambre(s) occupée(s)</p>
+    </article>
+    {% endif %}
+    {% if 'hotel' in allowed_modules %}
+    <article class="workspace-kpi tone-blue">
+        <div class="workspace-kpi-top">
+            <span class="workspace-kpi-icon">{% include "partials/sidebar_icon.html" with icon_name="reservations" %}</span>
+            <span class="workspace-kpi-status">En cours</span>
+        </div>
+        <small>Réservations actives</small>
+        <strong>{{ counts.reservations }}</strong>
+        <p>{{ counts.arrivals }} arrivée{{ counts.arrivals|pluralize }} · {{ counts.departures }} départ{{ counts.departures|pluralize }} aujourd’hui</p>
+    </article>
+    {% endif %}
+    {% if 'restaurant' in allowed_modules %}
+    <article class="workspace-kpi tone-orange">
+        <div class="workspace-kpi-top">
+            <span class="workspace-kpi-icon">{% include "partials/sidebar_icon.html" with icon_name="orders" %}</span>
+            <span class="workspace-kpi-status">Restaurant</span>
+        </div>
+        <small>Commandes restaurant</small>
+        <strong>{{ counts.restaurant_orders }}</strong>
+        <p>{% if 'bar' in allowed_modules %}{{ counts.bar_orders }} commande(s) bar également en cours{% else %}service en cours{% endif %}</p>
+    </article>
+    {% elif 'bar' in allowed_modules %}
+    <article class="workspace-kpi tone-orange">
+        <div class="workspace-kpi-top">
+            <span class="workspace-kpi-icon">{% include "partials/sidebar_icon.html" with icon_name="orders" %}</span>
+            <span class="workspace-kpi-status">Bar</span>
+        </div>
+        <small>Commandes bar</small>
+        <strong>{{ counts.bar_orders }}</strong>
+        <p>service au bar en cours</p>
+    </article>
+    {% endif %}
+    {% if 'finance' in allowed_modules %}
+    <article class="workspace-kpi tone-danger">
+        <div class="workspace-kpi-top">
+            <span class="workspace-kpi-icon">{% include "partials/sidebar_icon.html" with icon_name="invoices" %}</span>
+            <span class="workspace-kpi-status">À traiter</span>
+        </div>
+        <small>Paiements à traiter</small>
+        <strong>{{ counts.pending_invoices }}</strong>
+        <p>{{ outstanding|money }} encore à encaisser</p>
+    </article>
+    <article class="workspace-kpi tone-dark">
+        <div class="workspace-kpi-top">
+            <span class="workspace-kpi-icon">{% include "partials/sidebar_icon.html" with icon_name="payments" %}</span>
+            <span class="workspace-kpi-status">Projection</span>
+        </div>
+        <small>Revenu estimé</small>
+        <strong>{{ estimated_revenue|money }}</strong>
+        <p>{{ revenue|money }} déjà encaissés</p>
+    </article>
+    {% endif %}
+    {% if 'hotel' in allowed_modules %}
+    <article class="workspace-kpi tone-blue">
+        <div class="workspace-kpi-top">
+            <span class="workspace-kpi-icon">{% include "partials/sidebar_icon.html" with icon_name="frontdesk" %}</span>
+            <span class="workspace-kpi-status">Hôtel</span>
+        </div>
+        <small>Taux d’occupation</small>
+        <strong>{{ occupancy_rate }}%</strong>
+        <p>{{ counts.occupied_rooms }} sur {{ counts.rooms }} chambre(s)</p>
+    </article>
+    {% endif %}
+</section>
+
+<section class="workspace-grid">
+    <div class="workspace-main">
+        {% if 'finance' in allowed_modules %}
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head" style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+                <div>
+                    <span class="eyebrow">Performance</span>
+                    <h2>Activité hebdomadaire</h2>
+                    <p>Revenus encaissés, réservations et commandes sur les 7 derniers jours.</p>
+                </div>
+                <span class="status-badge status-pill blue">{{ week_totals.revenue|money }}</span>
+            </div>
+            <div class="week-chart">
+                <div class="week-bars">
+                    {% for day in weekly %}
+                    <div class="week-bar-col">
+                        <div class="week-bar-track" title="{{ day.revenue|money }}">
+                            <div class="week-bar" style="height: {{ day.pct }}%"></div>
+                        </div>
+                        <div class="week-bar-value">{{ day.revenue|money }}</div>
+                        <div class="week-bar-label">{{ day.label }}<small>{{ day.short_date }}</small></div>
+                        <div class="week-bar-meta">{{ day.reservations }} rés. · {{ day.orders }} cmd</div>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="week-chart-foot">
+                    <span><strong>{{ week_totals.reservations }}</strong> réservations créées</span>
+                    <span><strong>{{ week_totals.orders }}</strong> commandes créées</span>
+                    <span><strong>{{ week_totals.revenue|money }}</strong> encaissés</span>
+                </div>
+            </div>
+        </article>
+        {% endif %}
+
+        {% if 'hotel' in allowed_modules %}
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head" style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+                <div>
+                    <span class="eyebrow">Hôtel</span>
+                    <h2>Réservations récentes</h2>
+                    <p>Les dernières demandes enregistrées.</p>
+                </div>
+                <a class="button button-light button-small" href="{% url 'entity_list' 'hotel' 'reservation' %}">Tout voir</a>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Client</th><th>Chambre</th><th>Arrivée</th><th>Statut</th><th></th></tr></thead>
+                    <tbody>
+                        {% for r in recent_reservations %}
+                        <tr>
+                            <td><span class="record-title">{{ r.customer }}</span><span class="record-meta">{{ r.adults }} adulte{{ r.adults|pluralize }}{% if r.children %} · {{ r.children }} enfant{{ r.children|pluralize }}{% endif %}</span></td>
+                            <td>{{ r.room }}{% if r.room.room_type %}<span class="record-meta">{{ r.room.room_type }}</span>{% endif %}</td>
+                            <td>{{ r.check_in|date:"d M Y" }}</td>
+                            <td><span class="{{ r.status|badge_class }}">{{ r.get_status_display }}</span></td>
+                            <td class="text-nowrap"><a class="button button-light button-small" href="{% url 'entity_detail' 'hotel' 'reservation' r.pk %}">Ouvrir</a></td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="5" class="muted" style="padding:28px 16px;text-align:center">Aucune réservation récente. Créez la première depuis le bouton ci-dessus.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </article>
+        {% endif %}
+
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">Modules</span>
+                <h2>Espaces de travail</h2>
+                <p>Accédez à chaque domaine opérationnel et à ses registres.</p>
+            </div>
+            <div class="dash-modules">
+                {% for m in module_summary %}
+                <a class="dash-module" href="{{ m.url }}">
+                    <span class="icon-pill">{% include "partials/sidebar_icon.html" with icon_name=m.icon %}</span>
+                    <span><strong>{{ m.title }}</strong><small>{{ m.description }}</small></span>
+                    <b>{{ m.count }}</b>
+                </a>
+                {% empty %}
+                <p class="muted" style="padding:12px">Aucun module accessible avec votre rôle.</p>
+                {% endfor %}
+            </div>
+        </article>
+    </div>
+
+    <aside class="workspace-side">
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">Raccourcis · {{ user_role }}</span>
+                <h2>Actions rapides</h2>
+                <p>Les tâches les plus fréquentes de votre rôle.</p>
+            </div>
+            <div class="quick-grid">
+                {% for action in quick_actions %}
+                <a class="quick-action tone-{{ action.tone }}" href="{{ action.url }}">
+                    <span class="quick-icon">{% include "partials/sidebar_icon.html" with icon_name=action.icon %}</span>
+                    <span><strong>{{ action.label }}</strong><small>{{ action.meta }}</small></span>
+                </a>
+                {% empty %}
+                <p class="muted" style="padding:14px">Aucune action rapide disponible pour votre rôle.</p>
+                {% endfor %}
+            </div>
+        </article>
+
+        {% if 'hotel' in allowed_modules %}
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">7 prochains jours</span>
+                <h2>Arrivées prochaines</h2>
+            </div>
+            <div class="workspace-board">
+                {% for r in upcoming_arrivals %}
+                <p>
+                    <span></span>
+                    <a href="{% url 'entity_detail' 'hotel' 'reservation' r.pk %}">{{ r.customer }} · Ch. {{ r.room }}</a>
+                    <strong style="margin-left:auto">{{ r.check_in|date:"d/m" }}</strong>
+                </p>
+                {% empty %}
+                <p class="muted">Aucune arrivée prévue sur les 7 prochains jours.</p>
+                {% endfor %}
+            </div>
+        </article>
+        {% endif %}
+
+        {% if 'hotel' in allowed_modules %}
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">Aujourd’hui</span>
+                <h2>Arrivées & départs</h2>
+            </div>
+            <div class="workspace-board">
+                {% for r in arrivals %}
+                <p><span></span><a href="{% url 'entity_detail' 'hotel' 'reservation' r.pk %}">Arrivée · {{ r.customer }} · Ch. {{ r.room }}</a></p>
+                {% empty %}
+                <p class="muted">Aucune arrivée prévue aujourd’hui.</p>
+                {% endfor %}
+                {% for r in departures %}
+                <p><span></span><a href="{% url 'entity_detail' 'hotel' 'reservation' r.pk %}">Départ · {{ r.customer }} · Ch. {{ r.room }}</a></p>
+                {% empty %}
+                <p class="muted">Aucun départ prévu aujourd’hui.</p>
+                {% endfor %}
+            </div>
+        </article>
+        {% endif %}
+
+        {% if 'inventory' in allowed_modules %}
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head" style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+                <div>
+                    <span class="eyebrow">Inventaire</span>
+                    <h2>Vigilance stock</h2>
+                </div>
+                <a class="button button-light button-small" href="{% url 'entity_list' 'inventory' 'stock' %}">Détail</a>
+            </div>
+            <div class="workspace-board">
+                {% for stock in overdue_stock %}
+                <p>
+                    <span></span>
+                    {{ stock.product.name }} — {{ stock.location }}
+                    <strong style="margin-left:auto">{{ stock.quantity }}</strong>
+                </p>
+                {% empty %}
+                <p class="muted">Tous les stocks sont au-dessus du seuil minimum.</p>
+                {% endfor %}
+            </div>
+        </article>
+        {% endif %}
+    </aside>
+</section>
+{% endblock %}

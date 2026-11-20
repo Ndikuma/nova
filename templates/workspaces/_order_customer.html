@@ -1,0 +1,21 @@
+<fieldset class="waiter-customer">
+    <legend>Client</legend>
+    <div class="waiter-customer-modes">
+        {% for option in form.customer_mode %}
+        <label for="{{ option.id_for_label }}">
+            {{ option.tag }} <span>{{ option.choice_label }}</span>
+        </label>
+        {% endfor %}
+    </div>
+    {{ form.customer_mode.errors }}
+    <div class="waiter-customer-fields" data-customer-panel="existing">
+        {% include 'workspaces/_order_field.html' with field=form.customer only %}
+    </div>
+    <div class="waiter-customer-fields waiter-form-grid" data-customer-panel="new">
+        {% include 'workspaces/_order_field.html' with field=form.first_name only %}
+        {% include 'workspaces/_order_field.html' with field=form.last_name only %}
+        {% include 'workspaces/_order_field.html' with field=form.phone only %}
+        {% include 'workspaces/_order_field.html' with field=form.email only %}
+    </div>
+</fieldset>
+{% include 'workspaces/_order_field.html' with field=form.notes only %}

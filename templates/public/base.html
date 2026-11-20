@@ -1,0 +1,83 @@
+{% load static %}<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#faf8f3">
+    {% block description %}<meta name="description" content="{{ company.public_description }}">{% endblock %}
+    <title>{% block title %}{{ company.name }}{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'css/public.css' %}">
+    <script src="{% static 'js/public.js' %}" defer></script>
+</head>
+<body class="public-site">
+    <a class="pub-skip" href="#contenu">Aller au contenu</a>
+    {% block header %}
+    <header class="pub-header">
+        <div class="pub-container pub-header-inner">
+            {% include 'public/_brand.html' %}
+            {% with page=request.resolver_match.url_name %}
+            <nav class="pub-nav" aria-label="Navigation principale">
+                <a href="{% url 'public_home' %}#chambres"{% if page == 'public_room' %} aria-current="true"{% endif %}>Chambres</a>
+                <a href="{% url 'public_menu' %}"{% if page == 'public_menu' %} aria-current="page"{% endif %}>Restaurant</a>
+                <a href="{% url 'public_bar' %}"{% if page == 'public_bar' %} aria-current="page"{% endif %}>Bar</a>
+                <a href="{% url 'public_about' %}"{% if page == 'public_about' %} aria-current="page"{% endif %}>À propos</a>
+                {% if company.contact_line or company.address or company.whatsapp_url %}<a class="pub-nav-contact" href="#contact">Contact</a>{% endif %}
+            </nav>
+            {% endwith %}
+            <a class="pub-button pub-header-action" href="{% url 'public_home' %}#recherche">Préparer mon séjour <span aria-hidden="true">↗</span></a>
+        </div>
+    </header>
+    {% endblock %}
+
+    <main id="contenu" tabindex="-1">
+        {% block content %}{% endblock %}
+    </main>
+
+    {% block footer %}
+    <footer class="pub-footer" id="contact">
+        <div class="pub-container pub-footer-inner">
+            <div>
+                <a class="pub-footer-brand" href="{% url 'public_home' %}">{{ company.name }}</a>
+                {% if company.legal_line %}<p>{{ company.legal_line }}</p>{% endif %}
+            </div>
+            <div>
+                <h2>Découvrir</h2>
+                <ul>
+                    <li><a href="{% url 'public_home' %}#chambres">Chambres</a></li>
+                    <li><a href="{% url 'public_menu' %}">Carte du restaurant</a></li>
+                    <li><a href="{% url 'public_bar' %}">Carte du bar</a></li>
+                    <li><a href="{% url 'public_about' %}">À propos</a></li>
+                </ul>
+            </div>
+            {% if company.contact_line or company.address or company.whatsapp_url %}
+            <div>
+                <h2>Contact</h2>
+                <ul>
+                    {% if company.address %}<li>{{ company.address }}</li>{% endif %}
+                    {% if company.phone %}<li><a href="tel:{{ company.phone|cut:' ' }}">{{ company.phone }}</a></li>{% endif %}
+                    {% if company.phone_secondary %}<li><a href="tel:{{ company.phone_secondary|cut:' ' }}">{{ company.phone_secondary }}</a></li>{% endif %}
+                    {% if company.whatsapp_url %}<li><a href="{{ company.whatsapp_url }}">WhatsApp</a></li>{% endif %}
+                    {% if company.email %}<li><a href="mailto:{{ company.email }}">{{ company.email }}</a></li>{% endif %}
+                    {% if company.website %}<li><a href="{{ company.website }}">Site web</a></li>{% endif %}
+                </ul>
+            </div>
+            {% else %}
+            <div>
+                <h2>Séjour</h2>
+                <a href="{% url 'public_home' %}#recherche">Vérifier les disponibilités</a>
+            </div>
+            {% endif %}
+        </div>
+        <div class="pub-container">
+            <div class="pub-footer-bottom">
+                <small>© {% now 'Y' %} {{ company.name }}</small>
+                <a href="{% if user.is_authenticated %}{% url 'dashboard' %}{% else %}{% url 'login' %}{% endif %}">Espace équipe <span aria-hidden="true">↗</span></a>
+            </div>
+        </div>
+    </footer>
+    {% endblock %}
+</body>
+</html>

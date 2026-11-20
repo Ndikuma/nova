@@ -1,0 +1,65 @@
+<article class="card workspace-panel" id="demandes-web">
+    <div class="workspace-panel-head" style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap">
+        <div>
+            <span class="eyebrow">Site public</span>
+            <h2>Demandes de réservation web</h2>
+            {% if booking_requests %}<p>Contactez le voyageur, vérifiez la disponibilité puis créez la réservation si confirmée.</p>{% endif %}
+        </div>
+        <div class="page-actions">
+            {% if pending_request_count %}<span class="status-badge status-pill blue">{{ pending_request_count }} en attente</span>{% endif %}
+            <a class="button button-small button-light" href="/module/hotel/bookingrequest/">Toutes les demandes</a>
+        </div>
+    </div>
+    <div class="order-list">
+        {% for booking in booking_requests %}
+        <div class="order-card">
+            <header>
+                <div>
+                    <strong>{{ booking.guest_name }} · {{ booking.room_type.name }}</strong>
+                    <small>{{ booking.check_in|date:'d/m/Y' }} → {{ booking.check_out|date:'d/m/Y' }} · {{ booking.adults }} voyageur{{ booking.adults|pluralize }}</small>
+                </div>
+                <small>Reçue le {{ booking.created_at|date:'d/m/Y à H:i' }}</small>
+            </header>
+            <p class="muted" style="margin:0;font-size:13px">
+                Contact : {{ booking.get_contact_method_display }}
+                {% if booking.phone %} · {{ booking.phone }}{% endif %}
+                {% if booking.email %} · {{ booking.email }}{% endif %}
+            </p>
+            <div class="order-card-footer" style="flex-wrap:wrap;gap:8px">
+                {% if booking.contact_method == 'whatsapp' %}
+                <a class="button button-small button-light" href="https://wa.me/{{ booking.phone|cut:'+'|urlencode:'' }}" target="_blank" rel="noopener">WhatsApp</a>
+                {% elif booking.contact_method == 'phone' %}
+                <a class="button button-small button-light" href="tel:{{ booking.phone|urlencode:'+' }}">Appeler</a>
+                {% elif booking.email %}
+                <a class="button button-small button-light" href="mailto:{{ booking.email|urlencode:'@' }}?subject=Demande%20de%20r%C3%A9servation%20%23{{ booking.pk }}">E-mail</a>
+                {% endif %}
+                <a class="button button-small button-light" href="/module/hotel/bookingrequest/{{ booking.pk }}/">Détails</a>
+                {% if booking.reservation_id %}
+                <a class="button button-small" href="/module/hotel/reservation/{{ booking.reservation_id }}/">Voir la réservation</a>
+                {% elif not booking.handled_at %}
+                <a class="button button-small" href="{% url 'workspaces:reservation_create' %}?booking_request={{ booking.pk }}">Convertir en réservation</a>
+                <form method="post" action="{% url 'workspaces:resolve_booking_request' booking.pk %}" style="margin:0">
+                    {% csrf_token %}<button class="button button-small button-light" type="submit">Marquer traitée</button>
+                </form>
+                {% else %}
+                <form method="post" action="{% url 'workspaces:reopen_booking_request' booking.pk %}" style="margin:0">
+                    {% csrf_token %}<button class="button button-small button-light" type="submit">Rouvrir</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+        {% empty %}
+        <div class="overview-empty muted" style="padding:14px 0">
+            <p>Aucune demande web en attente.</p>
+            <p style="font-size:12px">Les demandes envoyées depuis le site public apparaissent ici pour être traitées par la réception.</p>
+        </div>
+        {% endfor %}
+        {% if booking_requests.has_other_pages %}
+        <nav class="pagination-actions" aria-label="Pages des demandes web">
+            {% if booking_requests.has_previous %}<a class="button button-small button-light" href="{% querystring demandes=booking_requests.previous_page_number %}#demandes-web">Précédente</a>{% endif %}
+            <span>Page {{ booking_requests.number }} sur {{ booking_requests.paginator.num_pages }}</span>
+            {% if booking_requests.has_next %}<a class="button button-small button-light" href="{% querystring demandes=booking_requests.next_page_number %}#demandes-web">Suivante</a>{% endif %}
+        </nav>
+        {% endif %}
+    </div>
+</article>

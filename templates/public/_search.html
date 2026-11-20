@@ -1,0 +1,10 @@
+<form class="pub-search" id="recherche" action="{{ action }}" method="get" aria-label="Vérifier les disponibilités" data-stay-search>
+    {% for field in search_form %}
+    <div class="pub-search-field{% if field.name == 'adults' %} pub-search-guests{% endif %}">
+        {{ field.label_tag }}
+        {{ field }}
+        {{ field.errors }}
+    </div>
+    {% endfor %}
+    <button class="pub-button" type="submit">Vérifier les disponibilités <span aria-hidden="true">↗</span></button>
+</form>

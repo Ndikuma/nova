@@ -1,0 +1,9 @@
+{% load ui %}
+{% if room.max_capacity < stay.adults %}
+<p class="pub-room-status pub-room-unavailable">Capacité insuffisante pour ce séjour</p>
+{% elif room.is_available %}
+<p class="pub-room-status pub-room-available">Disponible pour ces dates</p>
+{% if room.nightly_rate is not None %}<p class="pub-rate"><strong>{{ room.nightly_rate|money }}</strong> · tarif indicatif à l’arrivée, par nuit</p>{% endif %}
+{% else %}
+<p class="pub-room-status pub-room-unavailable">Indisponible pour ces dates</p>
+{% endif %}

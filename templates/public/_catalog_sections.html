@@ -1,0 +1,35 @@
+<div class="pub-container pub-catalog" data-catalog>
+    {% if categories %}
+    <div class="pub-catalog-controls">
+        {% if categories|length > 1 %}
+        <nav class="pub-category-links" aria-label="Catégories de la carte">
+            {% for category in categories %}
+            <a href="#categorie-{{ forloop.counter }}">{{ category.grouper.name|default:category.grouper|default:"Autres plats" }}</a>
+            {% endfor %}
+        </nav>
+        {% endif %}
+        <div class="pub-catalog-search" data-catalog-search hidden>
+            <label for="recherche-carte">Rechercher dans la carte</label>
+            <input id="recherche-carte" type="search" placeholder="Nom ou ingrédient">
+        </div>
+    </div>
+    {% endif %}
+    {% for category in categories %}
+    <section class="pub-catalog-section" id="categorie-{{ forloop.counter }}" data-category>
+        <div class="pub-section-head">
+            <h2>{{ category.grouper.name|default:category.grouper|default:"Autres plats" }}</h2>
+            {% if category.grouper.description %}<p>{{ category.grouper.description }}</p>{% endif %}
+        </div>
+        <div class="pub-menu-grid">
+            {% for item in category.list %}
+                {% include 'public/_menu_item.html' %}
+            {% endfor %}
+        </div>
+    </section>
+    {% empty %}
+    <p class="pub-empty">{{ empty_message }}</p>
+    {% endfor %}
+    {% if categories %}
+    <p class="pub-empty" data-no-menu-results role="status" hidden>Aucun article ne correspond à votre recherche.</p>
+    {% endif %}
+</div>

@@ -1,0 +1,424 @@
+{% extends 'base.html' %}{% load ui %}
+{% block title %}Réception · Arrivées & départs{% endblock %}
+{% block content %}
+{% include "workspaces/_header.html" with workspace_kicker="Workspace réception · opérations hôtel" workspace_title="Réception & plan des chambres" workspace_description="Gérez les arrivées, les départs, les réservations et la disponibilité des chambres en temps réel." workspace_meta=today|date:"l d F Y" %}
+
+<section class="workspace-kpis">
+    <article class="workspace-kpi tone-blue">
+        <div class="workspace-kpi-top">
+            <span class="workspace-kpi-icon">{% include "partials/sidebar_icon.html" with icon_name="frontdesk" %}</span>
+            <span class="workspace-kpi-status">Aujourd’hui</span>
+        </div>
+        <small>Arrivées</small>
+        <strong>{{ arrival_count }}</strong>
+        <p>clients attendus à la réception</p>
+    </article>
+    <article class="workspace-kpi tone-orange">
+        <div class="workspace-kpi-top">
+            <span class="workspace-kpi-icon">{% include "partials/sidebar_icon.html" with icon_name="logout" %}</span>
+            <span class="workspace-kpi-status">Aujourd’hui</span>
+        </div>
+        <small>Départs</small>
+        <strong>{{ departure_count }}</strong>
+        <p>check-out à finaliser</p>
+    </article>
+    <article class="workspace-kpi tone-green">
+        <div class="workspace-kpi-top">
+            <span class="workspace-kpi-icon">{% include "partials/sidebar_icon.html" with icon_name="hotel" %}</span>
+            <span class="workspace-kpi-status">Occupation</span>
+        </div>
+        <small>Chambres occupées</small>
+        <strong>{{ occupied_count }}</strong>
+        <p>{{ available_count_total }} disponible(s) sur {{ room_cards|length }}</p>
+    </article>
+    <article class="workspace-kpi tone-danger">
+        <div class="workspace-kpi-top">
+            <span class="workspace-kpi-icon">{% include "partials/sidebar_icon.html" with icon_name="cleaning" %}</span>
+            <span class="workspace-kpi-status">Ménage</span>
+        </div>
+        <small>Tâches ouvertes</small>
+        <strong>{{ housekeeping_count }}</strong>
+        <p>chambres à préparer ou en cours</p>
+    </article>
+</section>
+
+<section class="workspace-grid">
+    <div class="workspace-main">
+        {% include 'workspaces/_booking_requests.html' %}
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head" style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start">
+                <div>
+                    <span class="eyebrow">Plan des chambres</span>
+                    <h2>État en temps réel</h2>
+                    <p>Chambres disponibles, occupées, en ménage ou hors service.</p>
+                </div>
+                <div class="actions">
+                    <a class="button button-small button-light" href="{% url 'workspaces:service_order_create' %}">Commande restaurant</a>
+                    <a class="button button-small" href="{% url 'workspaces:reservation_create' %}">Nouvelle réservation</a>
+                </div>
+            </div>
+            <div class="room-card-grid room-card-grid-rich">
+                {% for card in room_cards %}
+                <article class="room-card room-card-rich status-{{ card.state }}">
+                    <div class="room-card-top">
+                        <a class="room-card-num" href="{% url 'workspaces:reception_room_detail' card.room.pk %}">Ch. {{ card.room.number }}</a>
+                        <span class="status-badge {% if card.state == 'available' %}status-success{% elif card.state == 'occupied' %}status-pill blue{% elif card.state == 'cleaning' %}status-warning{% else %}status-danger{% endif %}">{{ card.state_label }}</span>
+                    </div>
+                    <p class="room-card-type">{{ card.room.room_type.name }}{% if card.room.floor %} · étage {{ card.room.floor }}{% endif %}</p>
+
+                    {% if card.reservation %}
+                    <div class="room-card-stay" style="cursor:default">
+                        <strong>{{ card.reservation.customer }}</strong>
+                        <span>{{ card.reservation.check_in|date:"d/m" }} → {{ card.reservation.check_out|date:"d/m" }} · {{ card.reservation.get_status_display }}</span>
+                        <span>Montant {{ card.reservation.estimated_total|money }}</span>
+                    </div>
+                    {% if card.reservation.invoice %}
+                    <div class="room-card-payment {% if card.reservation.invoice.balance > 0 %}is-due{% else %}is-paid{% endif %}">
+                        <span>Facture {{ card.reservation.invoice.number }}</span>
+                        <strong>{% if card.reservation.invoice.balance > 0 %}Solde {{ card.reservation.invoice.balance|money }}{% else %}Soldée{% endif %}</strong>
+                        <small>Payé {{ card.reservation.invoice.paid_amount|money }} / {{ card.reservation.invoice.total_amount|money }}</small>
+                    </div>
+                    {% else %}
+                    <div class="room-card-payment"><span>Facture</span><strong>Non préparée</strong></div>
+                    {% endif %}
+                    {% elif card.task %}
+                    <div class="room-card-stay" style="cursor:default">
+                        <strong>{{ card.task.get_task_type_display }}</strong>
+                        <span>{{ card.task.get_status_display }}{% if card.task.assigned_to %} · {{ card.task.assigned_to }}{% endif %}</span>
+                    </div>
+                    {% else %}
+                    <div class="room-card-stay" style="cursor:default">
+                        <strong>Chambre prête</strong>
+                        <span>Disponible à la réservation</span>
+                    </div>
+                    {% endif %}
+
+                    <div class="desk-room-actions room-card-actions">
+                        <a class="button button-small button-light" href="{% url 'workspaces:reception_room_detail' card.room.pk %}">Fiche</a>
+                        {% if card.state == 'available' %}
+                        <a class="button button-small" href="{% url 'workspaces:reservation_create' %}?room={{ card.room.pk }}">Réserver</a>
+                        {% elif card.state == 'cleaning' and card.task %}
+                        <form method="post" action="{% url 'workspaces:housekeeping_status' card.task.pk %}">{% csrf_token %}<input type="hidden" name="status" value="{% if card.task.status == 'PENDING' %}IN_PROGRESS{% else %}DONE{% endif %}"><button class="button button-small button-light" type="submit">{% if card.task.status == 'PENDING' %}Démarrer{% else %}Terminer{% endif %}</button></form>
+                        {% elif card.reservation %}
+                        <a class="button button-small button-light" href="/module/hotel/reservation/{{ card.reservation.pk }}/">Dossier</a>
+                        {% if card.reservation.status == 'CONFIRMED' and card.reservation.check_in <= today %}
+                        <form method="post" action="{% url 'workspaces:reservation_check_in' card.reservation.pk %}">{% csrf_token %}<button class="button button-small" type="submit">Check-in</button></form>
+                        {% endif %}
+                        {% if card.reservation.status == 'CHECKED_IN' %}
+                            {% if not card.reservation.invoice or card.reservation.invoice.balance > 0 %}
+                            <form method="post" action="{% url 'workspaces:reservation_prepare_checkout' card.reservation.pk %}">{% csrf_token %}<button class="button button-small button-light" type="submit">{% if card.reservation.invoice %}Facture{% else %}Préparer facture{% endif %}</button></form>
+                            {% endif %}
+                            {% if card.reservation.invoice and card.reservation.invoice.balance > 0 and can_collect %}
+                            <a class="button button-small" href="{% url 'workspaces:payment_create' card.reservation.invoice.pk %}">Encaisser</a>
+                            {% elif card.reservation.invoice and card.reservation.invoice.balance <= 0 %}
+                            <form method="post" action="{% url 'workspaces:reservation_check_out' card.reservation.pk %}">{% csrf_token %}<button class="button button-small" type="submit">Check-out</button></form>
+                            {% endif %}
+                        {% endif %}
+                        {% endif %}
+                    </div>
+                </article>
+                {% empty %}
+                <p class="overview-empty muted">Aucune chambre configurée.</p>
+                {% endfor %}
+            </div>
+        </article>
+
+        <section class="workspace-split">
+            <article class="card workspace-panel">
+                <div class="workspace-panel-head">
+                    <span class="eyebrow">Arrivées du jour</span>
+                    <h2>{{ arrival_count }} client(s) attendu(s)</h2>
+                </div>
+                <div class="overview-list">
+                    {% for reservation in arrivals %}
+                    <div class="overview-row" style="cursor:default">
+                        <div>
+                            <strong>{{ reservation.customer }}</strong>
+                            <small>Chambre {{ reservation.room.number }} · {{ reservation.get_status_display }} · {{ reservation.estimated_total|money }}</small>
+                        </div>
+                        <div class="desk-row-actions">
+                            <a class="button button-small button-light" href="/module/hotel/reservation/{{ reservation.pk }}/">Dossier</a>
+                            {% if reservation.status == 'CONFIRMED' %}
+                            <form method="post" action="{% url 'workspaces:reservation_check_in' reservation.pk %}">
+                                {% csrf_token %}<button class="button button-small" type="submit">Check-in</button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% empty %}
+                    <p class="overview-empty muted">Aucune arrivée prévue aujourd’hui.</p>
+                    {% endfor %}
+                </div>
+            </article>
+
+            <article class="card workspace-panel">
+                <div class="workspace-panel-head">
+                    <span class="eyebrow">Départs du jour</span>
+                    <h2>{{ departure_count }} check-out</h2>
+                </div>
+                <div class="overview-list">
+                    {% for reservation in departures %}
+                    <div class="overview-row" style="cursor:default">
+                        <div>
+                            <strong>{{ reservation.customer }}</strong>
+                            <small>Chambre {{ reservation.room.number }}{% if reservation.departure_invoice %} · facture {{ reservation.departure_invoice.number }} · solde {{ reservation.departure_invoice.balance|money }}{% else %} · facture à préparer{% endif %}</small>
+                        </div>
+                        <div class="desk-row-actions">
+                            {% if not reservation.departure_invoice or reservation.departure_invoice.balance > 0 %}
+                            <form method="post" action="{% url 'workspaces:reservation_prepare_checkout' reservation.pk %}">
+                                {% csrf_token %}<button class="button button-small button-light" type="submit">{% if reservation.departure_invoice %}Actualiser facture{% else %}Préparer facture{% endif %}</button>
+                            </form>
+                            {% endif %}
+                            {% if reservation.departure_invoice and reservation.departure_invoice.balance <= 0 %}
+                            <form method="post" action="{% url 'workspaces:reservation_check_out' reservation.pk %}">
+                                {% csrf_token %}<button class="button button-small" type="submit">Check-out</button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% empty %}
+                    <p class="overview-empty muted">Aucun départ prévu aujourd’hui.</p>
+                    {% endfor %}
+                </div>
+            </article>
+        </section>
+
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">Planning</span>
+                <h2>14 prochains jours</h2>
+                <p>Occupation prévisionnelle par chambre.</p>
+            </div>
+            <div class="calendar-wrap" tabindex="0" role="region" aria-label="Planning des chambres sur 14 jours">
+                <table class="calendar-table">
+                    <thead>
+                        <tr>
+                            <th class="calendar-room">Chambre</th>
+                            {% for day in calendar_days %}<th class="{% if day == today %}is-today{% endif %}">{{ day|date:"D" }}<span>{{ day|date:"d/m" }}</span></th>{% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in calendar_rows %}
+                        <tr>
+                            <th class="calendar-room"><a href="{% url 'workspaces:reception_room_detail' row.room.pk %}">{{ row.room.number }}</a></th>
+                            {% for cell in row.cells %}
+                            <td class="{% if cell.is_today %}is-today{% endif %}{% if cell.reservation %} is-booked{% endif %}">
+                                {% if cell.reservation %}
+                                <a href="/module/hotel/reservation/{{ cell.reservation.pk }}/" title="{{ cell.reservation.customer }}">{{ cell.reservation.customer.last_name }}</a>
+                                {% endif %}
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </article>
+
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head" style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start">
+                <div>
+                    <span class="eyebrow">Dossiers</span>
+                    <h2>Réservations</h2>
+                </div>
+                <form class="desk-search" method="get" style="margin:0;max-width:420px">
+                    <input type="search" name="q" value="{{ reservation_query }}" placeholder="Client, téléphone, chambre…">
+                    <select name="status">
+                        <option value="">Tous statuts</option>
+                        <option value="DRAFT" {% if status_filter == 'DRAFT' %}selected{% endif %}>Brouillon</option>
+                        <option value="CONFIRMED" {% if status_filter == 'CONFIRMED' %}selected{% endif %}>Confirmée</option>
+                        <option value="CHECKED_IN" {% if status_filter == 'CHECKED_IN' %}selected{% endif %}>En séjour</option>
+                        <option value="CHECKED_OUT" {% if status_filter == 'CHECKED_OUT' %}selected{% endif %}>Terminée</option>
+                        <option value="CANCELLED" {% if status_filter == 'CANCELLED' %}selected{% endif %}>Annulée</option>
+                    </select>
+                    <button class="button button-light" type="submit">Filtrer</button>
+                </form>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Client</th><th>Chambre</th><th>Séjour</th><th>Montant</th><th>Statut</th><th></th></tr></thead>
+                    <tbody>
+                        {% for reservation in reservations %}
+                        <tr>
+                            <td><span class="record-title">{{ reservation.customer }}</span><small class="muted">{{ reservation.customer.phone }}</small></td>
+                            <td>{{ reservation.room.number }} · {{ reservation.room.room_type.name }}</td>
+                            <td class="text-nowrap">{{ reservation.check_in|date:"d/m/Y" }} → {{ reservation.check_out|date:"d/m/Y" }}</td>
+                            <td>{{ reservation.estimated_total|money }}</td>
+                            <td><span class="{{ reservation.status|badge_class }}">{{ reservation.get_status_display }}</span></td>
+                            <td class="desk-row-actions">
+                                <a class="button button-small button-light" href="/module/hotel/reservation/{{ reservation.pk }}/">Voir</a>
+                                {% if reservation.status == 'DRAFT' or reservation.status == 'CONFIRMED' %}
+                                <a class="button button-small button-light" href="{% url 'workspaces:reservation_edit' reservation.pk %}">Modifier</a>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="6" class="muted" style="padding:26px;text-align:center">Aucune réservation ne correspond à la recherche.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% if reservations.has_other_pages %}
+            <div class="pagination">
+                {% if reservations.has_previous %}<a class="button button-small button-light" href="?page={{ reservations.previous_page_number }}{% if reservation_query %}&q={{ reservation_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}">Précédent</a>{% endif %}
+                <span class="muted">Page {{ reservations.number }} / {{ reservations.paginator.num_pages }}</span>
+                {% if reservations.has_next %}<a class="button button-small button-light" href="?page={{ reservations.next_page_number }}{% if reservation_query %}&q={{ reservation_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}">Suivant</a>{% endif %}
+            </div>
+            {% endif %}
+        </article>
+
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">Housekeeping</span>
+                <h2>Tâches de ménage</h2>
+                <p>Préparation des chambres et suivi des interventions.</p>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Chambre</th><th>Tâche</th><th>Assignée à</th><th>Prévue</th><th>Statut</th><th></th></tr></thead>
+                    <tbody>
+                        {% for task in housekeeping_tasks %}
+                        <tr>
+                            <td><span class="record-title">{{ task.room.number }}</span></td>
+                            <td>{{ task.get_task_type_display }}</td>
+                            <td>{{ task.assigned_to|default:"Non assignée" }}</td>
+                            <td>{{ task.scheduled_date|date:"d/m/Y" }}</td>
+                            <td><span class="{{ task.status|badge_class }}">{{ task.get_status_display }}</span></td>
+                            <td class="desk-row-actions">
+                                {% if task.status == 'PENDING' %}
+                                <form method="post" action="{% url 'workspaces:housekeeping_status' task.pk %}">
+                                    {% csrf_token %}<input type="hidden" name="status" value="IN_PROGRESS">
+                                    <button class="button button-small button-light" type="submit">Démarrer</button>
+                                </form>
+                                {% elif task.status == 'IN_PROGRESS' %}
+                                <form method="post" action="{% url 'workspaces:housekeeping_status' task.pk %}">
+                                    {% csrf_token %}<input type="hidden" name="status" value="DONE">
+                                    <button class="button button-small" type="submit">Terminer</button>
+                                </form>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="6" class="muted" style="padding:26px;text-align:center">Aucune tâche de ménage ouverte.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </article>
+    </div>
+
+    <aside class="workspace-side">
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">Disponibilité</span>
+                <h2>Chambres sur la période</h2>
+            </div>
+            <form method="get" class="stack-form">
+                <label>Arrivée<input type="date" name="avail_from" value="{{ avail_from|date:'Y-m-d' }}"></label>
+                <label>Départ<input type="date" name="avail_to" value="{{ avail_to|date:'Y-m-d' }}"></label>
+                <button class="button" type="submit">Vérifier</button>
+            </form>
+            <div class="room-availability-cards">
+                {% for row in availability_rooms %}
+                <article class="room-availability-card status-{{ row.state }}">
+                    <div class="room-availability-head">
+                        <a class="room-card-num" href="{% url 'workspaces:reception_room_detail' row.room.pk %}">{{ row.room.number }}</a>
+                        <span class="status-badge {% if row.state == 'available' %}status-success{% elif row.state == 'reserved' %}status-pill blue{% elif row.state == 'occupied' %}status-warning{% else %}status-danger{% endif %}">{{ row.state_label }}</span>
+                    </div>
+                    <small class="muted">{{ row.room.room_type.name }}</small>
+                    {% if row.reservation %}<small>{{ row.reservation.customer }} · {{ row.reservation.check_in|date:"d/m" }}→{{ row.reservation.check_out|date:"d/m" }}</small>{% endif %}
+                    <div class="desk-room-actions" style="margin-top:6px;flex-wrap:wrap">
+                        <a class="button button-small button-light" href="{% url 'workspaces:reception_room_detail' row.room.pk %}">Fiche</a>
+                        {% if row.state == 'available' %}<a class="button button-small" href="{% url 'workspaces:reservation_create' %}?room={{ row.room.pk }}">Réserver</a>{% endif %}
+                    </div>
+                </article>
+                {% empty %}
+                <p class="overview-empty muted">Aucune chambre configurée.</p>
+                {% endfor %}
+            </div>
+            <p class="muted" style="font-size:12px;margin:8px 0 0">{{ available_count }} disponible(s) sur {{ availability_rooms|length }} chambre(s) · {{ avail_from|date:"d/m" }} → {{ avail_to|date:"d/m" }}</p>
+        </article>
+
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">Prochainement</span>
+                <h2>Réservations à venir</h2>
+            </div>
+            <div class="overview-list">
+                {% for reservation in upcoming %}
+                <a class="overview-row" href="/module/hotel/reservation/{{ reservation.pk }}/">
+                    <div>
+                        <strong>{{ reservation.customer }}</strong>
+                        <small>{{ reservation.check_in|date:"d/m" }} · chambre {{ reservation.room.number }} · {{ reservation.get_status_display }}</small>
+                    </div>
+                    <span class="record-title">{{ reservation.estimated_total|money }}</span>
+                </a>
+                {% empty %}
+                <p class="overview-empty muted">Aucune arrivée dans les 14 prochains jours.</p>
+                {% endfor %}
+            </div>
+        </article>
+
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">Tarifs</span>
+                <h2>Grille tarifaire active</h2>
+            </div>
+            <div class="overview-list">
+                {% for rate in rates %}
+                <div class="overview-row" style="cursor:default">
+                    <div>
+                        <strong>{{ rate.room_type.name }}</strong>
+                        <small>{% if rate.end_date %}{{ rate.start_date|date:"d/m/Y" }} → {{ rate.end_date|date:"d/m/Y" }}{% else %}À partir du {{ rate.start_date|date:"d/m/Y" }}{% endif %}</small>
+                    </div>
+                    <span class="record-title">{{ rate.price|money }}</span>
+                </div>
+                {% empty %}
+                <p class="overview-empty muted">Aucun tarif actif configuré.</p>
+                {% endfor %}
+            </div>
+        </article>
+
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">Clients</span>
+                <h2>Derniers clients</h2>
+            </div>
+            <div class="overview-list">
+                {% for customer in recent_customers %}
+                <a class="overview-row" href="/module/core/customer/{{ customer.pk }}/">
+                    <div>
+                        <strong>{{ customer }}</strong>
+                        <small>{{ customer.phone|default:"Sans téléphone" }}</small>
+                    </div>
+                    <span class="avatar avatar-sm">{{ customer|initials }}</span>
+                </a>
+                {% empty %}
+                <p class="overview-empty muted">Aucun client enregistré.</p>
+                {% endfor %}
+            </div>
+        </article>
+
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">Traçabilité</span>
+                <h2>Activité récente</h2>
+            </div>
+            <div class="timeline">
+                {% for log in audit_logs %}
+                <div class="timeline-item">
+                    <span class="timeline-dot"></span>
+                    <div>
+                        <strong>{{ log.action }}</strong>
+                        <small>{{ log.object_type }}{% if log.object_id %} · {{ log.object_id }}{% endif %}</small>
+                        <small>{{ log.user|default:"Système" }} · {{ log.timestamp|date:"d/m H:i" }}</small>
+                    </div>
+                </div>
+                {% empty %}
+                <p class="overview-empty muted">Aucune activité enregistrée.</p>
+                {% endfor %}
+            </div>
+        </article>
+    </aside>
+</section>
+{% endblock %}

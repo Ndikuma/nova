@@ -1,0 +1,54 @@
+{% extends 'base.html' %}{% load ui %}
+{% block title %}Commande #{{ order.pk }} · {% if bar_order %}Bar{% else %}Restaurant{% endif %}{% endblock %}
+{% block content %}
+<section class="page-head">
+    <div>
+        <a href="{% url 'entity_list' module entity %}">← Commandes</a>
+        <h1>Commande #{{ order.pk }}</h1>
+        <p>{{ order.table|default:"Sans table" }} · {{ order.customer|default:"Client de passage" }}</p>
+    </div>
+    <div class="page-actions">
+        <span class="{{ order.status|badge_class }}">{{ order.get_status_display }}</span>
+        {% if bar_order %}
+            {% url 'reports:order_print' 'bar' order.pk as order_print_url %}
+            {% url 'reports:order_pdf' 'bar' order.pk as order_pdf_url %}
+        {% else %}
+            {% url 'reports:order_print' 'restaurant' order.pk as order_print_url %}
+            {% url 'reports:order_pdf' 'restaurant' order.pk as order_pdf_url %}
+        {% endif %}
+        <a class="button button-light" href="{{ order_print_url }}" target="_blank" rel="noopener">Imprimer</a>
+        <a class="button button-light" href="{{ order_print_url }}?ticket=1" target="_blank" rel="noopener">Ticket POS</a>
+        <a class="button button-light" href="{{ order_pdf_url }}">PDF</a>
+        {% if invoice %}
+        <span class="status-badge status-pill blue">Addition {{ invoice.number }} · {{ invoice.balance|money }} à régler</span>
+        {% elif can_compose_order %}
+            {% if order.status == 'OPEN' %}
+                {% if bar_order %}{% url 'workspaces:bar_order_edit' order.pk as edit_url %}{% else %}{% url 'workspaces:service_order_edit' order.pk as edit_url %}{% endif %}
+                <a class="button" href="{{ edit_url }}">Modifier la commande</a>
+            {% elif order.status != 'CANCELLED' and order.status != 'PAID' and order_lines %}
+                {% if bar_order %}{% url 'workspaces:bar_request_bill' order.pk as bill_url %}{% else %}{% url 'workspaces:service_request_bill' order.pk as bill_url %}{% endif %}
+                <form method="post" action="{{ bill_url }}">{% csrf_token %}<button class="button" type="submit">Transmettre à la caisse</button></form>
+            {% endif %}
+        {% endif %}
+    </div>
+</section>
+{% if order.notes %}<p class="card">{{ order.notes }}</p>{% endif %}
+<section class="card table-card">
+    <div class="table-header"><h2>Articles</h2><strong>Total {{ order.total_amount|money }}</strong></div>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Article</th><th>Quantité</th><th>Prix unitaire</th><th>Sous-total</th></tr></thead>
+            <tbody>
+            {% for line in order_lines %}
+            <tr>
+                <td>{% if bar_order %}{{ line.drink.name }}{% else %}{{ line.menu_item.name }}{% endif %}{% if line.notes %}<small class="record-meta">{{ line.notes }}</small>{% endif %}</td>
+                <td>{{ line.quantity }}</td>
+                <td>{{ line.unit_price|money }}</td>
+                <td>{{ line.subtotal|money }}</td>
+            </tr>
+            {% empty %}<tr><td colspan="4">Aucun article enregistré.</td></tr>{% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

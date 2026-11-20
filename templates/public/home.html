@@ -1,0 +1,81 @@
+{% extends 'public/base.html' %}{% load static %}
+{% block title %}{{ company.name }} · Hôtel, restaurant et bar{% endblock %}
+{% block content %}
+<section class="pub-landing">
+    <img class="pub-landing-image" src="{% static 'images/hospitality-terrace.webp' %}" width="1536" height="864" alt="" fetchpriority="high">
+    <div class="pub-container pub-landing-inner">
+        <div class="pub-landing-copy">
+            <p class="pub-kicker">Hôtel · Restaurant · Bar</p>
+            <h1>{% if company.public_hero_title %}{{ company.public_hero_title }}{% else %}Bienvenue chez <em>{{ company.name }}</em>{% endif %}</h1>
+            <p class="pub-landing-description">{{ company.public_description }}</p>
+            {% if company.address %}<p class="pub-landing-address">{{ company.address }}</p>{% endif %}
+            <div class="pub-hero-actions">
+                <a class="pub-button pub-hero-button" href="#recherche">Trouver une chambre <span aria-hidden="true">↓</span></a>
+                <a class="pub-hero-link" href="{% url 'public_menu' %}">Découvrir la carte <span aria-hidden="true">↗</span></a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<div class="pub-container pub-booking">
+    {% url 'public_home' as search_url %}
+    {% include 'public/_search.html' with action=search_url|add:'#recherche' %}
+</div>
+
+<section class="pub-section pub-container" id="chambres">
+    <div class="pub-section-head">
+        <h2>Nos chambres</h2>
+        {% if stay %}<p>{{ stay.check_in|date:"j F" }} → {{ stay.check_out|date:"j F Y" }} <span aria-hidden="true">·</span> {{ stay.adults }} voyageur{{ stay.adults|pluralize }}</p>{% endif %}
+    </div>
+    <div class="pub-room-grid">
+        {% for room in room_types %}
+        <article class="pub-room-card">
+            <div>
+                <h3>{{ room.name }}</h3>
+                <p class="pub-room-capacity">Jusqu’à {{ room.max_capacity }} personne{{ room.max_capacity|pluralize }}</p>
+                {% if room.description %}<p class="pub-room-description">{{ room.description|truncatewords:24 }}</p>{% endif %}
+            </div>
+            <div class="pub-room-card-bottom">
+                {% if stay %}{% include 'public/_room_status.html' with room=room %}{% endif %}
+                <a class="pub-link" href="{% url 'public_room' pk=room.pk %}{% if stay %}?check_in={{ stay.check_in|date:'Y-m-d' }}&amp;check_out={{ stay.check_out|date:'Y-m-d' }}&amp;adults={{ stay.adults }}{% endif %}">
+                    Voir la chambre <span class="pub-visually-hidden">{{ room.name }}</span><span aria-hidden="true">↗</span>
+                </a>
+            </div>
+        </article>
+        {% empty %}
+        <p class="pub-empty">Les chambres seront bientôt présentées ici.</p>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="pub-dining">
+    <div class="pub-container pub-dining-inner">
+        <img src="{% static 'images/hospitality-table.webp' %}" width="1280" height="853" alt="" loading="lazy">
+        <div class="pub-dining-copy">
+            <h2>À table</h2>
+            <section>
+                <div class="pub-preview-head">
+                    <h3>Restaurant</h3>
+                    <a class="pub-link" href="{% url 'public_menu' %}">Voir la carte <span aria-hidden="true">↗</span></a>
+                </div>
+                {% for dish in featured_dishes %}
+                    {% include 'public/_menu_item.html' with item=dish compact=True %}
+                {% empty %}
+                    <p>La carte du restaurant est en préparation.</p>
+                {% endfor %}
+            </section>
+            <section>
+                <div class="pub-preview-head">
+                    <h3>Bar</h3>
+                    <a class="pub-link" href="{% url 'public_bar' %}">Voir le bar <span aria-hidden="true">↗</span></a>
+                </div>
+                {% for drink in featured_drinks %}
+                    {% include 'public/_menu_item.html' with item=drink compact=True %}
+                {% empty %}
+                    <p>La carte du bar est en préparation.</p>
+                {% endfor %}
+            </section>
+        </div>
+    </div>
+</section>
+{% endblock %}

@@ -1,0 +1,154 @@
+.waiter-head h1 { font-size: clamp(24px, 4vw, 32px); }
+.waiter-head a + h1 { margin-top: 8px; }
+.waiter-head > .button { min-height: 44px; }
+.waiter-panel { margin-bottom: 16px; }
+.waiter-panel-head, .waiter-menu-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+}
+.waiter-panel-head { padding: 16px 18px 0; }
+.waiter-panel-head h2, .waiter-menu-head h2 { font-size: 19px; }
+.waiter-panel-head small { margin-left: 4px; color: var(--text-soft); }
+.waiter-panel .table-card-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 190px), 1fr)); }
+.waiter-panel .table-card { min-width: 0; }
+.waiter-table-order { border: 1px solid var(--border); }
+.waiter-table-action { white-space: normal; margin-top: auto; min-height: 40px; }
+.waiter-ready { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 10px; padding: 16px 18px; }
+.waiter-ready > div { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px; background: var(--surface-2); border-radius: var(--radius-sm); }
+.waiter-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.waiter-tabs a { padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.waiter-tabs [aria-current] { background: var(--brand-soft); border-color: var(--brand); font-weight: 650; }
+.waiter-panel .order-card { scroll-margin-top: calc(var(--topbar-h) + 14px); }
+.waiter-panel .order-card:target { outline: 2px solid var(--brand); outline-offset: 2px; }
+.waiter-item-note { display: block; color: var(--text-soft); }
+.waiter-panel summary, .waiter-order-form summary { color: var(--brand); cursor: pointer; }
+.waiter-panel .inline-customer-form { margin-top: 6px; }
+.waiter-panel .order-card-footer { align-items: flex-start; }
+.waiter-cancel { align-self: center; }
+.waiter-cancel[open] .button { margin-top: 6px; }
+
+.waiter-order-form { display: grid; gap: 18px; }
+.waiter-order-form .errorlist { margin: 0; padding-inline-start: 18px; color: var(--danger); }
+.waiter-order-form .message.error .errorlist { color: inherit; }
+.waiter-form-errors { display: grid; gap: 5px; margin: 0; }
+.waiter-form-errors a { width: fit-content; color: inherit; text-decoration: underline; }
+.waiter-order-options, .waiter-review { margin: 0; padding: clamp(14px, 2vw, 21px); }
+.waiter-order-form :is(#order-service, #order-review, .waiter-menu-row, .waiter-form-errors) {
+  scroll-margin-top: calc(var(--topbar-h) + 16px);
+}
+.waiter-order-options h2, .waiter-review h2 { font-size: 18px; }
+.waiter-order-options h2 { margin: 0 0 12px; }
+.waiter-form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 175px), 1fr)); gap: 10px; }
+.waiter-order-form label, .waiter-customer legend { font-weight: 650; }
+.waiter-order-form :is(.text-input, .select-input, .ss-control, .button) { min-height: 44px; }
+
+.waiter-order-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(285px, 355px);
+  gap: 20px;
+  align-items: start;
+}
+.waiter-menu, .waiter-review { min-width: 0; }
+.waiter-menu-head { margin-bottom: 12px; }
+.waiter-menu-tools { display: flex; gap: 8px; flex-wrap: wrap; }
+.waiter-menu-tools input { flex: 1 1 160px; min-width: 0; }
+.waiter-menu-tools [aria-pressed="true"] { border-color: var(--brand); background: var(--brand-soft); }
+.waiter-menu-group { margin-bottom: 12px; padding: 14px 14px 0; }
+.waiter-menu-group h3 { padding: 0 4px 9px; font-size: 14px; color: var(--text-soft); }
+.waiter-menu-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 5px 12px;
+  align-items: center;
+  border-top: 1px solid var(--border);
+  padding: 10px 4px;
+}
+.waiter-menu-row.has-quantity {
+  background: var(--surface-2);
+}
+.waiter-menu-row:focus-within { outline: 1px solid var(--brand); outline-offset: -1px; }
+.waiter-menu-item { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.waiter-menu-item img { flex: none; object-fit: cover; border-radius: 8px; }
+.waiter-item-description { display: flex; flex-direction: column; gap: 3px; overflow-wrap: anywhere; }
+.waiter-item-description span, .waiter-item-description small { color: var(--text-soft); }
+.waiter-quantity { display: flex; align-items: center; gap: 4px; }
+.waiter-quantity input { width: 48px; text-align: center; padding-inline: 4px; appearance: textfield; }
+.waiter-quantity input::-webkit-inner-spin-button { appearance: none; }
+.waiter-quantity .button { width: 44px; padding: 0; font-size: 20px; }
+.waiter-quantity [data-quantity-step="1"] { background: var(--brand-soft); color: var(--brand-strong); }
+.waiter-line-note { grid-column: 1 / -1; font-size: 13px; }
+.waiter-line-note .text-input { width: min(100%, 410px); margin-top: 5px; }
+
+.waiter-review {
+  position: sticky;
+  top: calc(var(--topbar-h) + 16px);
+  max-height: calc(100dvh - var(--topbar-h) - 32px);
+  overflow-y: auto;
+  display: grid;
+  gap: 14px;
+}
+.waiter-review-cart { border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+.waiter-review-lines { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; }
+.waiter-review-lines li, .waiter-review-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 5px 12px;
+}
+.waiter-review-lines li { padding-block: 5px; border-bottom: 1px solid var(--border); }
+.waiter-review-lines a { text-decoration: underline; text-underline-offset: 3px; }
+.waiter-review-lines span { white-space: nowrap; color: var(--text-soft); }
+.waiter-review-total { margin-top: 8px; }
+.waiter-review-total strong { font-size: 19px; font-variant-numeric: tabular-nums; }
+.waiter-customer { min-width: 0; padding: 0; margin: 0; border: 0; }
+.waiter-customer legend { padding: 0; margin-bottom: 6px; }
+.waiter-customer-modes { display: flex; flex-wrap: wrap; gap: 6px; }
+.waiter-customer-modes label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.waiter-customer-modes input { margin: 0; accent-color: var(--brand); }
+.waiter-customer-modes label:has(:checked) { border-color: var(--brand); background: var(--brand-soft); color: var(--brand-strong); }
+.waiter-customer-fields { margin-top: 10px; }
+.waiter-order-actions { display: grid; gap: 7px; }
+.waiter-order-actions .button { white-space: normal; }
+
+.waiter-mobile-summary { display: none; }
+@media (max-width: 820px) {
+  .waiter-order-layout { grid-template-columns: minmax(0, 1fr); }
+  .waiter-review { position: static; max-height: none; overflow: visible; }
+  .waiter-mobile-summary {
+    position: sticky;
+    z-index: 2;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 7px 10px;
+    padding: 8px 12px max(8px, env(safe-area-inset-bottom));
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    box-shadow: var(--shadow-md);
+  }
+  .waiter-mobile-summary output { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .waiter-mobile-summary.review-in-view { visibility: hidden; }
+}
+@media (max-width: 540px) {
+  .waiter-order-form :is(#order-service, #order-review, .waiter-menu-row, .waiter-form-errors) { scroll-margin-top: 122px; }
+  .waiter-menu-item img { display: none; }
+}
+@media screen and (max-height: 480px) and (orientation: landscape) {
+  .waiter-review, .waiter-mobile-summary { position: static; max-height: none; }
+}

@@ -1,0 +1,209 @@
+{% extends 'base.html' %}{% load ui %}
+{% block title %}Administration système · Superadmin{% endblock %}
+{% block content %}
+{% include "workspaces/_header.html" with workspace_kicker="Workspace superadmin · administration technique" workspace_title="Supervision globale du système" workspace_description="Surveillez les activités, les utilisateurs, les opérations et les anomalies de la plateforme." workspace_meta="Visibilité transversale · hôtel · restaurant · bar · inventaire · finance" workspace_actions=superadmin_actions %}
+
+<section class="workspace-kpis">
+    <article class="workspace-kpi tone-blue">
+        <div class="workspace-kpi-top">
+            <span class="workspace-kpi-icon">{% include "partials/sidebar_icon.html" with icon_name="team" %}</span>
+            <span class="workspace-kpi-status">Comptes</span>
+        </div>
+        <small>Utilisateurs</small>
+        <strong>{{ user_total }}</strong>
+        <p>{{ groups|length }} rôle(s) configuré(s)</p>
+    </article>
+    <article class="workspace-kpi tone-orange">
+        <div class="workspace-kpi-top">
+            <span class="workspace-kpi-icon">{% include "partials/sidebar_icon.html" with icon_name="orders" %}</span>
+            <span class="workspace-kpi-status">Temps réel</span>
+        </div>
+        <small>Opérations en cours</small>
+        <strong>{{ open_orders }}<span class="muted" style="font-size:14px;font-weight:500"> / {{ open_bar_orders }} bar</span></strong>
+        <p>commandes restaurant et bar ouvertes</p>
+    </article>
+    <article class="workspace-kpi tone-green">
+        <div class="workspace-kpi-top">
+            <span class="workspace-kpi-icon">{% include "partials/sidebar_icon.html" with icon_name="payments" %}</span>
+            <span class="workspace-kpi-status">Encaissé</span>
+        </div>
+        <small>Encaissements cumulés</small>
+        <strong>{{ payments_total|money }}</strong>
+        <p>{{ outstanding|money }} encore à encaisser</p>
+    </article>
+    <article class="workspace-kpi tone-danger">
+        <div class="workspace-kpi-top">
+            <span class="workspace-kpi-icon">{% include "partials/sidebar_icon.html" with icon_name="notifications" %}</span>
+            <span class="workspace-kpi-status">Vigilance</span>
+        </div>
+        <small>Anomalies détectées</small>
+        <strong>{{ anomalies|length }}</strong>
+        <p>{{ pending_invoice_count }} facture(s) · {{ low_stock_count }} alerte(s) stock</p>
+    </article>
+</section>
+
+<section class="workspace-grid">
+    <div class="workspace-main">
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">Supervision</span>
+                <h2>Anomalies & points de contrôle</h2>
+                <p>Les écarts qui nécessitent une intervention technique ou opérationnelle.</p>
+            </div>
+            <div class="overview-list">
+                {% for item in anomalies %}
+                <a class="overview-row" href="{{ item.url }}">
+                    <div>
+                        <strong>{{ item.label }}</strong>
+                        <small>{{ item.detail }}</small>
+                    </div>
+                    <span class="status-badge {% if item.tone == 'danger' %}status-danger{% else %}status-warning{% endif %}">À traiter</span>
+                </a>
+                {% empty %}
+                <p class="overview-empty muted">Aucune anomalie détectée. Le système est opérationnel.</p>
+                {% endfor %}
+            </div>
+        </article>
+
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">Modules</span>
+                <h2>Activité par domaine</h2>
+                <p>Volumes consolidés sur l’ensemble des applications métier.</p>
+            </div>
+            <div class="dash-modules">
+                {% for module in modules %}
+                <a class="dash-module" href="{{ module.url }}">
+                    <span class="icon-pill">{% include "partials/sidebar_icon.html" with icon_name=module.icon %}</span>
+                    <span><strong>{{ module.label }}</strong><small>{{ module.meta }}</small></span>
+                    <b>{{ module.value }}</b>
+                </a>
+                {% endfor %}
+            </div>
+        </article>
+
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head" style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+                <div>
+                    <span class="eyebrow">Traçabilité</span>
+                    <h2>Journal d’audit récent</h2>
+                    <p>Dernières opérations enregistrées par les utilisateurs.</p>
+                </div>
+                <a class="button button-light button-small" href="{% url 'entity_list' 'core' 'auditlog' %}">Tout voir</a>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Action</th><th>Objet</th><th>Utilisateur</th><th>Date</th></tr></thead>
+                    <tbody>
+                        {% for log in logs %}
+                        <tr>
+                            <td><span class="record-title">{{ log.action }}</span></td>
+                            <td>{{ log.object_type }}{% if log.object_id %} · {{ log.object_id }}{% endif %}</td>
+                            <td>{{ log.user|default:"Système" }}</td>
+                            <td class="text-nowrap">{{ log.timestamp|date:"d/m/Y H:i" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="muted" style="padding:26px;text-align:center">Aucune activité enregistrée.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </article>
+    </div>
+
+    <aside class="workspace-side">
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">Équipe</span>
+                <h2>Utilisateurs récents</h2>
+            </div>
+            <div class="overview-list">
+                {% for user in users %}
+                <div class="overview-row" style="cursor:default">
+                    <div>
+                        <strong>{{ user.get_full_name|default:user.username }}</strong>
+                        <small>{{ user.job_title|default:"Équipe" }} · {% for group in user.groups.all %}{{ group.name }}{% if not forloop.last %} · {% endif %}{% empty %}Sans rôle{% endfor %}</small>
+                    </div>
+                    <span class="status-badge {% if user.is_active %}status-success{% else %}status-danger{% endif %}">{% if user.is_active %}Actif{% else %}Inactif{% endif %}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </article>
+
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">Finance</span>
+                <h2>Encaissements à suivre</h2>
+            </div>
+            <div class="overview-stat-grid">
+                <div class="overview-stat tone-orange">
+                    <span>À encaisser</span>
+                    <strong>{{ outstanding|money }}</strong>
+                    <small>{{ pending_invoice_count }} facture(s) ouverte(s)</small>
+                </div>
+                <div class="overview-stat tone-green">
+                    <span>Encaissé</span>
+                    <strong>{{ payments_total|money }}</strong>
+                    <small>paiements cumulés</small>
+                </div>
+            </div>
+            <div class="overview-list" style="margin-top:12px">
+                <a class="overview-row" href="{% url 'workspaces:finance_balance' %}">
+                    <div>
+                        <strong>Bilan financier</strong>
+                        <small>Hôtel, restaurant, bar et dépenses par période</small>
+                    </div>
+                    <span class="status-badge status-pill blue">Ouvrir</span>
+                </a>
+                <a class="overview-row" href="{% url 'workspaces:cashier' %}">
+                    <div>
+                        <strong>Ouvrir la caisse</strong>
+                        <small>Encaisser et suivre les montants</small>
+                    </div>
+                    <span class="status-badge status-pill blue">Ouvrir</span>
+                </a>
+            </div>
+        </article>
+
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">Inventaire</span>
+                <h2>Stocks critiques</h2>
+            </div>
+            <div class="overview-list">
+                {% for stock in low_stock %}
+                <a class="overview-row" href="/module/inventory/stock/{{ stock.pk }}/">
+                    <div>
+                        <strong>{{ stock.product.name }}</strong>
+                        <small>{{ stock.location.name }} · seuil {{ stock.product.minimum_stock }}</small>
+                    </div>
+                    <span class="status-badge status-danger">{{ stock.quantity }}</span>
+                </a>
+                {% empty %}
+                <p class="overview-empty muted">Tous les stocks sont au-dessus du seuil.</p>
+                {% endfor %}
+            </div>
+        </article>
+
+        <article class="card workspace-panel">
+            <div class="workspace-panel-head">
+                <span class="eyebrow">Paiements</span>
+                <h2>Derniers encaissements</h2>
+            </div>
+            <div class="overview-list">
+                {% for payment in recent_payments %}
+                <a class="overview-row" href="{% url 'workspaces:payment_receipt' payment.pk %}">
+                    <div>
+                        <strong>{{ payment.invoice.number }}</strong>
+                        <small>{{ payment.invoice.customer }} · {{ payment.method.name }} · {{ payment.paid_at|date:"d/m H:i" }}</small>
+                    </div>
+                    <span class="record-title">{{ payment.amount|money }}</span>
+                </a>
+                {% empty %}
+                <p class="overview-empty muted">Aucun paiement enregistré.</p>
+                {% endfor %}
+            </div>
+        </article>
+    </aside>
+</section>
+{% endblock %}

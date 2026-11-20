@@ -1,0 +1,4 @@
+<nav class="pub-menu-nav" aria-label="Cartes de l’établissement">
+    <a href="{% url 'public_menu' %}"{% if current == 'restaurant' %} aria-current="page"{% endif %}>Restaurant</a>
+    <a href="{% url 'public_bar' %}"{% if current == 'bar' %} aria-current="page"{% endif %}>Bar</a>
+</nav>

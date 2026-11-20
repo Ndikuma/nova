@@ -1,0 +1,48 @@
+{% extends 'public/base.html' %}
+{% block title %}Connexion · {{ company.name }}{% endblock %}
+{% block description %}{% endblock %}
+{% block header %}{% endblock %}
+{% block footer %}{% endblock %}
+{% block content %}
+<div class="login-shell">
+    <div class="login-frame">
+        <a class="login-back" href="{% url 'public_home' %}"><span aria-hidden="true">←</span> Retour au site</a>
+
+        <section class="login-card" aria-labelledby="login-title">
+            {% include 'public/_brand.html' %}
+            <h1 id="login-title">Connexion</h1>
+
+            {% for message in messages %}
+            <p class="login-feedback{% if message.level_tag == 'error' %} login-error{% endif %}" role="status">{{ message }}</p>
+            {% endfor %}
+            {% if form.non_field_errors %}
+            <div class="login-feedback login-error" role="alert">{{ form.non_field_errors }}</div>
+            {% endif %}
+
+            <form method="post" class="login-form">
+                {% csrf_token %}
+                {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+
+                <div class="login-field">
+                    {{ form.username.label_tag }}
+                    {{ form.username }}
+                    {{ form.username.errors }}
+                </div>
+
+                <div class="login-field">
+                    {{ form.password.label_tag }}
+                    <div class="login-password">
+                        {{ form.password }}
+                        <button type="button" data-password-toggle aria-controls="{{ form.password.id_for_label }}" aria-label="Afficher le mot de passe" hidden>Afficher</button>
+                    </div>
+                    {{ form.password.errors }}
+                </div>
+
+                <button class="pub-button" type="submit">Se connecter</button>
+            </form>
+
+            <p class="login-help">Identifiants oubliés ? Contactez votre responsable.</p>
+        </section>
+    </div>
+</div>
+{% endblock %}

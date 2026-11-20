@@ -1,0 +1,18 @@
+<section class="workspace-head workspace-role-head">
+    <div>
+        <span class="eyebrow">{{ workspace_kicker }}</span>
+        <h1>{{ workspace_title }}</h1>
+        <p>{{ workspace_description }}</p>
+        {% if workspace_meta %}<div class="workspace-meta">{{ workspace_meta }}</div>{% endif %}
+    </div>
+    {% if workspace_actions %}
+    <div class="workspace-head-actions">
+        {% for action in workspace_actions %}
+        <a class="button{% if not forloop.first %} button-light{% endif %}" href="{{ action.url }}">
+            {% if action.icon %}<span class="button-icon">{% include "partials/sidebar_icon.html" with icon_name=action.icon %}</span>{% endif %}
+            {{ action.label }}
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+</section>

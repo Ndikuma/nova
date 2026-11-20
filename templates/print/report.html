@@ -1,0 +1,37 @@
+{% extends 'print/base.html' %}
+{% block title %}{{ title }}{% endblock %}
+{% block toolbar_title %}{{ title }}{% endblock %}
+{% block toolbar_actions %}
+<a class="btn" href="{% url 'reports:preview_pdf' code %}?date_from={{ start|date:'Y-m-d' }}&date_to={{ end|date:'Y-m-d' }}">Télécharger le PDF</a>
+{% endblock %}
+{% block doc_meta %}
+<h1>RAPPORT</h1>
+<span>{{ title }}</span>
+<span>Du {{ start|date:"d/m/Y" }} au {{ end|date:"d/m/Y" }}</span>
+<span>{{ rows|length }} ligne(s)</span>
+{% endblock %}
+{% block content %}
+<div class="doc-table-wrap" tabindex="0" role="region" aria-label="Données du rapport">
+    <table>
+        <thead>
+            <tr>
+                {% for header in headers %}<th>{{ header }}</th>{% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in rows %}
+            <tr>
+                {% for cell in row %}<td>{{ cell }}</td>{% endfor %}
+            </tr>
+            {% empty %}
+            <tr><td colspan="{{ headers|length }}" class="empty">Aucune donnée sur la période sélectionnée.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="signatures">
+    <div class="signature">Préparé par {{ generated_by }}</div>
+    <div class="signature">Visa de la direction</div>
+</div>
+{% endblock %}

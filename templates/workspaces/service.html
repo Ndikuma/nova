@@ -1,0 +1,273 @@
+{% extends 'base.html' %}{% load static ui %}
+{% block title %}Service en salle · Restaurant{% endblock %}
+{% block head %}<link rel="stylesheet" href="{% static 'css/service.css' %}">{% endblock %}
+{% block content %}
+<section class="page-head waiter-head">
+    <div>
+        <h1>Service · Salle & Bar</h1>
+        <p>Gérez vos commandes restaurant et bar au même endroit : tables, prises de commande et suivi.</p>
+    </div>
+    <div class="page-actions">
+        <a class="button" href="{% url 'workspaces:service_order_create' %}?next=service">Commande restaurant</a>
+        <a class="button button-light" href="{% url 'workspaces:bar_order_create' %}?next=service">Commande bar</a>
+    </div>
+</section>
+
+<section class="card waiter-panel" aria-labelledby="tables-title">
+    <header class="waiter-panel-head"><h2 id="tables-title">Tables restaurant</h2></header>
+    <div class="table-card-grid">
+        {% for table in tables %}
+        <article class="table-card status-{{ table.status|lower }}">
+            <div class="table-card-top">
+                <h3 class="table-card-name"><a href="{% url 'workspaces:service_table_detail' table.pk %}">{{ table.name }}</a></h3>
+                <span class="{{ table.status|badge_class }}">{{ table.get_status_display }}</span>
+            </div>
+            <p class="muted">{% if table.section %}{{ table.section }} · {% endif %}{{ table.capacity }} couvert{{ table.capacity|pluralize }}</p>
+            {% for order in table.active_orders %}
+            <a class="table-card-order waiter-table-order" href="{% if show_mine %}{% url 'workspaces:service' %}{% endif %}#order-{{ order.pk }}">
+                <strong>#{{ order.pk }} · {{ order.get_status_display }}</strong>
+                <small>{{ order.created_by.get_short_name|default:order.created_by.username }}</small>
+            </a>
+            {% endfor %}
+            <div class="desk-row-actions" style="margin-top:8px;flex-wrap:wrap">
+                <a class="button button-light button-small" href="{% url 'workspaces:service_table_detail' table.pk %}">Fiche table</a>
+                {% if table.status != 'CLOSED' %}
+                <a class="button button-light button-small" href="{% url 'workspaces:service_order_create' %}?table={{ table.pk }}&next=service">
+                    {% if table.active_orders %}Ajouter une commande{% else %}Prendre la commande{% endif %}
+                </a>
+                {% endif %}
+            </div>
+        </article>
+        {% empty %}
+        <p class="overview-empty muted">Aucune table restaurant active.</p>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="card waiter-panel" aria-labelledby="bar-tables-title">
+    <header class="waiter-panel-head"><h2 id="bar-tables-title">Tables & comptoir bar</h2></header>
+    <div class="table-card-grid">
+        {% for table in bar_tables %}
+        <article class="table-card status-{{ table.status|lower }}">
+            <div class="table-card-top">
+                <a class="table-card-name" href="{% url 'workspaces:bar_table_detail' table.pk %}">{{ table.name }}</a>
+                <span class="status-badge {% if table.status == 'AVAILABLE' %}status-success{% elif table.status == 'OCCUPIED' %}status-pill blue{% else %}status-warning{% endif %}">{{ table.get_status_display }}</span>
+            </div>
+            <p class="muted">{{ table.capacity|default:"—" }} place(s)</p>
+            {% if table.active_order %}
+            <a class="table-card-order waiter-table-order" href="#bar-order-{{ table.active_order.pk }}">
+                <strong>#{{ table.active_order.pk }} · {{ table.active_order.get_status_display }}</strong>
+                <small>{{ table.active_order.items.count }} boisson(s) · {{ table.active_order.total_amount|money }}</small>
+            </a>
+            <div class="desk-row-actions" style="margin-top:8px;flex-wrap:wrap">
+                <a class="button button-small button-light" href="{% url 'workspaces:bar_table_detail' table.pk %}">Fiche table</a>
+                <a class="button button-small button-light" href="{% url 'workspaces:bar_order_create' %}?table={{ table.pk }}&next=service">Ajouter une commande</a>
+            </div>
+            {% else %}
+            <p class="table-card-idle">Table libre</p>
+            <div class="desk-row-actions" style="margin-top:8px;flex-wrap:wrap">
+                <a class="button button-small button-light" href="{% url 'workspaces:bar_table_detail' table.pk %}">Fiche table</a>
+                <a class="button button-small button-light" href="{% url 'workspaces:bar_order_create' %}?table={{ table.pk }}&next=service">Prendre la commande</a>
+            </div>
+            {% endif %}
+        </article>
+        {% empty %}
+        <p class="overview-empty muted">Aucune table de bar active.</p>
+        {% endfor %}
+    </div>
+</section>
+
+{% if ready_orders or bar_ready_orders %}
+<section class="card waiter-panel" aria-labelledby="ready-title">
+    <header class="waiter-panel-head"><h2 id="ready-title">À servir / addition <small>{{ ready_orders|length|add:bar_ready_orders|length }}</small></h2></header>
+    <div class="waiter-ready">
+        {% for order in ready_orders %}
+        <div>
+            <a href="#order-{{ order.pk }}"><strong>Restaurant · {% if order.table %}{{ order.table.name }}{% else %}{{ order.get_source_display }}{% endif %}</strong> · #{{ order.pk }}</a>
+            <form method="post" action="{% url 'workspaces:service_order_action' order.pk 'serve' %}">
+                {% csrf_token %}<button class="button" type="submit">Servir</button>
+            </form>
+        </div>
+        {% endfor %}
+        {% for order in bar_ready_orders %}
+        <div>
+            <a href="#bar-order-{{ order.pk }}"><strong>Bar · {% if order.table %}{{ order.table.name }}{% else %}Comptoir{% endif %}</strong> · #{{ order.pk }}</a>
+            <form method="post" action="{% url 'workspaces:bar_request_bill' order.pk %}">
+                {% csrf_token %}<input type="hidden" name="next" value="service"><button class="button" type="submit">Transmettre à la caisse</button>
+            </form>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+
+<section class="card waiter-panel" id="commandes" aria-labelledby="orders-title">
+    <header class="waiter-panel-head">
+        <h2 id="orders-title">Commandes restaurant en cours</h2>
+        <nav class="waiter-tabs" aria-label="Filtrer les commandes restaurant">
+            <a href="{% url 'workspaces:service' %}#commandes"{% if not show_mine %} aria-current="page"{% endif %}>Toutes ({{ active_order_count }})</a>
+            <a href="{% url 'workspaces:service' %}?vue=mes-commandes#commandes"{% if show_mine %} aria-current="page"{% endif %}>Mes commandes ({{ my_order_count }})</a>
+        </nav>
+    </header>
+    <div class="order-list">
+        {% for order in active_orders %}
+        <article class="order-card" id="order-{{ order.pk }}">
+            <header>
+                <div>
+                    <strong>{% if order.table %}{{ order.table.name }}{% else %}{{ order.get_source_display }}{% endif %} · #{{ order.pk }}</strong>
+                    <small>{{ order.created_by.get_short_name|default:order.created_by.username }} · {{ order.created_at|date:"H:i" }}</small>
+                </div>
+                <div class="order-card-head-actions">
+                    <span class="{{ order.status|badge_class }}">{{ order.get_status_display }}</span>
+                    <span class="record-title">{{ order.total_amount|money }}</span>
+                </div>
+            </header>
+            <ul class="order-items">
+                {% for item in order.items.all %}
+                <li><span><b>{{ item.quantity }}×</b> {{ item.menu_item.name }}{% if item.notes %}<small class="waiter-item-note">{{ item.notes }}</small>{% endif %}</span><em>{{ item.subtotal|money }}</em></li>
+                {% endfor %}
+            </ul>
+            {% if order.notes %}<p class="order-note">{{ order.notes }}</p>{% endif %}
+            <div class="order-card-footer">
+                <div class="order-actions">
+                    <a class="button button-light" href="{% url 'reports:order_print' 'restaurant' order.pk %}?ticket=1" target="_blank" rel="noopener">Ticket commande</a>
+                    {% if order.invoice %}
+                    <a class="button button-light" href="{% url 'reports:invoice_print' order.invoice.pk %}?ticket=1" target="_blank" rel="noopener">Ticket facture</a>
+                    {% endif %}
+                    {% if order.status == 'OPEN' %}
+                        {% if not order.invoice %}
+                        <a class="button" href="{% url 'workspaces:service_order_edit' order.pk %}?next=service">Modifier le brouillon</a>
+                        {% endif %}
+                        <form method="post" action="{% url 'workspaces:service_order_action' order.pk 'confirm' %}">
+                            {% csrf_token %}<button class="button button-light" type="submit">Envoyer en cuisine</button>
+                        </form>
+                    {% elif order.status == 'READY' %}
+                        <form method="post" action="{% url 'workspaces:service_order_action' order.pk 'serve' %}">
+                            {% csrf_token %}<button class="button" type="submit">Marquer servie</button>
+                        </form>
+                    {% endif %}
+                    {% if order.invoice %}
+                    <span class="status-badge status-pill blue">Addition {{ order.invoice.number }} · {{ order.invoice.balance|money }}</span>
+                    {% elif order.status != 'OPEN' %}
+                    <form method="post" action="{% url 'workspaces:service_request_bill' order.pk %}">
+                        {% csrf_token %}<button class="button button-light" type="submit">Transmettre à la caisse</button>
+                    </form>
+                    {% endif %}
+                    {% if order.status != 'SERVED' and not order.invoice %}
+                    <details class="waiter-cancel">
+                        <summary>Annuler…</summary>
+                        <form method="post" action="{% url 'workspaces:service_order_action' order.pk 'cancel' %}">
+                            {% csrf_token %}<button class="button danger-button" type="submit">Confirmer l’annulation</button>
+                        </form>
+                    </details>
+                    {% endif %}
+                </div>
+                {% if order.customer %}
+                    <p class="muted">Client · {{ order.customer }}</p>
+                {% elif order.invoice %}
+                    <p class="muted">Client de passage</p>
+                {% else %}
+                    <details>
+                        <summary>Associer un client pour l’addition</summary>
+                        <form class="inline-customer-form" method="post" action="{% url 'workspaces:service_attach_customer' order.pk %}">
+                            {% csrf_token %}
+                            <select name="customer" aria-label="Client" required>
+                                <option value="">Choisir un client</option>
+                                {% for customer in customers %}<option value="{{ customer.pk }}">{{ customer }}</option>{% endfor %}
+                            </select>
+                            <button class="button button-light" type="submit">Associer</button>
+                        </form>
+                    </details>
+                {% endif %}
+            </div>
+        </article>
+        {% empty %}
+        <p class="overview-empty muted">Aucune commande dans cette vue.</p>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="card waiter-panel" id="commandes-bar" aria-labelledby="bar-orders-title">
+    <header class="waiter-panel-head">
+        <h2 id="bar-orders-title">Commandes bar en cours <small>{{ bar_active_orders|length }}</small></h2>
+    </header>
+    <div class="order-list">
+        {% for order in bar_active_orders %}
+        <article class="order-card" id="bar-order-{{ order.pk }}">
+            <header>
+                <div>
+                    <strong>{% if order.table %}{{ order.table.name }}{% else %}Comptoir{% endif %} · #{{ order.pk }}</strong>
+                    <small>{{ order.created_by.get_short_name|default:order.created_by.username }} · {{ order.created_at|date:"H:i" }}</small>
+                </div>
+                <div class="order-card-head-actions">
+                    <span class="{{ order.status|badge_class }}">{{ order.get_status_display }}</span>
+                    <span class="record-title">{{ order.total_amount|money }}</span>
+                </div>
+            </header>
+            <ul class="order-items">
+                {% for item in order.items.all %}
+                <li><span><b>{{ item.quantity }}×</b> {{ item.drink.name }}</span><em>{{ item.subtotal|money }}</em></li>
+                {% endfor %}
+            </ul>
+            {% if order.notes %}<p class="order-note">{{ order.notes }}</p>{% endif %}
+            <div class="order-card-footer">
+                <div class="order-actions">
+                    <a class="button button-light" href="{% url 'reports:order_print' 'bar' order.pk %}?ticket=1" target="_blank" rel="noopener">Ticket commande</a>
+                    {% if order.invoice %}
+                    <a class="button button-light" href="{% url 'reports:invoice_print' order.invoice.pk %}?ticket=1" target="_blank" rel="noopener">Ticket facture</a>
+                    {% endif %}
+                    {% if order.status == 'OPEN' and not order.invoice %}
+                    <a class="button" href="{% url 'workspaces:bar_order_edit' order.pk %}?next=service">Modifier le brouillon</a>
+                    {% endif %}
+                    {% if order.status == 'OPEN' or order.status == 'CONFIRMED' %}
+                    <form method="post" action="{% url 'workspaces:bar_order_action' order.pk 'start' %}">
+                        {% csrf_token %}<input type="hidden" name="next" value="service"><button class="button button-light" type="submit">Commencer</button>
+                    </form>
+                    {% endif %}
+                    {% if order.status == 'PREPARING' %}
+                    <form method="post" action="{% url 'workspaces:bar_order_action' order.pk 'serve' %}">
+                        {% csrf_token %}<input type="hidden" name="next" value="service"><button class="button" type="submit">Marquer servie</button>
+                    </form>
+                    {% endif %}
+                    {% if order.invoice %}
+                    <span class="status-badge status-pill blue">Addition {{ order.invoice.number }} · {{ order.invoice.balance|money }}</span>
+                    {% elif order.status != 'OPEN' %}
+                    <form method="post" action="{% url 'workspaces:bar_request_bill' order.pk %}">
+                        {% csrf_token %}<input type="hidden" name="next" value="service"><button class="button button-light" type="submit">Transmettre à la caisse</button>
+                    </form>
+                    {% endif %}
+                    {% if order.status != 'SERVED' and not order.invoice %}
+                    <details class="waiter-cancel">
+                        <summary>Annuler…</summary>
+                        <form method="post" action="{% url 'workspaces:bar_order_action' order.pk 'cancel' %}">
+                            {% csrf_token %}<input type="hidden" name="next" value="service"><button class="button danger-button" type="submit">Confirmer l’annulation</button>
+                        </form>
+                    </details>
+                    {% endif %}
+                </div>
+                {% if order.customer %}
+                    <p class="muted">Client · {{ order.customer }}</p>
+                {% elif order.invoice %}
+                    <p class="muted">Client de passage</p>
+                {% else %}
+                    <details>
+                        <summary>Associer un client pour l’addition</summary>
+                        <form class="inline-customer-form" method="post" action="{% url 'workspaces:bar_attach_customer' order.pk %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="next" value="service">
+                            <select name="customer" aria-label="Client" required>
+                                <option value="">Choisir un client</option>
+                                {% for customer in customers %}<option value="{{ customer.pk }}">{{ customer }}</option>{% endfor %}
+                            </select>
+                            <button class="button button-light" type="submit">Associer</button>
+                        </form>
+                    </details>
+                {% endif %}
+            </div>
+        </article>
+        {% empty %}
+        <p class="overview-empty muted">Aucune commande bar en cours.</p>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}
