@@ -18,6 +18,8 @@ class Customer(models.Model):
     last_name = models.CharField(max_length=80)
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=30)
+    identity_number = models.CharField("Numéro de pièce d’identité", max_length=80, blank=True)
+    nationality = models.CharField("Nationalité", max_length=80, blank=True)
     address = models.TextField(blank=True)
     tax_id = models.CharField(max_length=60, blank=True)
     notes = models.TextField(blank=True)

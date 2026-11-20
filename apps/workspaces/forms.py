@@ -38,11 +38,14 @@ class ReservationForm(forms.ModelForm):
     last_name = forms.CharField(max_length=80, required=False, label='Nom')
     phone = forms.CharField(max_length=30, required=False, label='Téléphone', widget=forms.TextInput(attrs={'type': 'tel'}))
     email = forms.EmailField(required=False, label='E-mail')
+    identity_number = forms.CharField(max_length=80, required=False, label="Numéro de pièce d’identité")
+    nationality = forms.CharField(max_length=80, required=False, label='Nationalité (facultatif)')
 
     class Meta:
         model = Reservation
         fields = (
             'customer_mode', 'customer', 'first_name', 'last_name', 'phone', 'email',
+            'identity_number', 'nationality',
             'room', 'check_in', 'check_out', 'adults', 'children',
             'status', 'estimated_total', 'contact_information', 'notes',
         )
@@ -51,7 +54,7 @@ class ReservationForm(forms.ModelForm):
             'check_out': forms.DateInput(attrs={'type': 'date'}),
         }
 
-    customer_fields = ('first_name', 'last_name', 'phone', 'email')
+    customer_fields = ('first_name', 'last_name', 'phone', 'email', 'identity_number', 'nationality')
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
