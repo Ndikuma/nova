@@ -66,11 +66,10 @@ class ChefRestaurantScopeTests(TestCase):
                 self.assertEqual(
                     self.client.get(reverse('module_home', args=[module])).status_code, 200)
 
-    def test_chef_cannot_open_hotel_or_bar_modules(self):
-        for module in ('hotel', 'bar'):
-            with self.subTest(module=module):
-                self.assertEqual(
-                    self.client.get(reverse('module_home', args=[module])).status_code, 403)
+    def test_chef_cannot_open_hotel_but_can_open_bar_and_inventory(self):
+        self.assertEqual(self.client.get(reverse('module_home', args=['hotel'])).status_code, 403)
+        self.assertEqual(self.client.get(reverse('module_home', args=['bar'])).status_code, 200)
+        self.assertEqual(self.client.get(reverse('module_home', args=['inventory'])).status_code, 200)
 
     def test_chef_cannot_open_reception_workspace(self):
         self.assertEqual(

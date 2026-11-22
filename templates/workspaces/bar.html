@@ -180,7 +180,7 @@
                 <a class="overview-row" href="{% url 'workspaces:bar_order_create' %}">
                     <div>
                         <strong>{{ drink.name }}</strong>
-                        <small>{{ drink.category.name }} · {{ drink.selling_price|money }}</small>
+                        <small>{{ drink.category.name }} · {{ drink.selling_price|money }}{% if drink.stock_product %} · Stock: {{ drink.stock_product.name }}{% endif %}</small>
                     </div>
                     <span class="status-badge {% if drink.available %}status-success{% else %}status-danger{% endif %}">{% if drink.available %}Disponible{% else %}Rupture{% endif %}</span>
                 </a>
@@ -219,6 +219,7 @@
             <div class="workspace-panel-head">
                 <span class="eyebrow">Stocks bar</span>
                 <h2>Signaler un besoin</h2>
+                <p class="muted">Les <strong>Boissons</strong> (carte/bar) sont vendues aux clients. Les <strong>Produits inventaire</strong> sont les stocks physiques. Liez une boisson à un produit inventaire pour suivre le réapprovisionnement.</p>
             </div>
             <form method="post" action="{% url 'workspaces:bar_restock' %}" class="stack-form">
                 {% csrf_token %}

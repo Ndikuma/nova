@@ -171,7 +171,7 @@ class DocumentBrand:
         return self.profile.print_colors['cell']
 
 
-MANAGEMENT_ROLES = {'Superadmin', 'Owner'}
+MANAGEMENT_ROLES = {'Superadmin', 'Owner', 'Comptable'}
 ALL_STAFF = {'Superadmin', 'Owner', 'Cashier', 'Chef', 'Receptionist', 'Waiter', 'Bartender'}
 
 REPORT_CATALOG = {

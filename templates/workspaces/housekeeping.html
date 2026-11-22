@@ -1,0 +1,208 @@
+{% extends 'base.html' %}{% load ui %}
+{% block title %}Housekeeping · Tâches{% endblock %}
+{% block content %}
+{% include "workspaces/_header.html" with workspace_kicker="Workspace housekeeping · entretien chambres" workspace_title="Housekeeping & chambres" workspace_description="Consultez toutes les chambres, lancez/terminez le nettoyage ou l’inspection, et signalez l’avancement." workspace_meta=today|date:"l d F Y" %}
+
+<section class="workspace-kpis">
+    <article class="workspace-kpi tone-orange"><div class="workspace-kpi-top"><span class="workspace-kpi-icon">{% include "partials/sidebar_icon.html" with icon_name="cleaning" %}</span><span class="workspace-kpi-status">À faire</span></div><small>Tâches en attente</small><strong>{{ pending_tasks|length }}</strong><p>chambres à traiter</p></article>
+    <article class="workspace-kpi tone-blue"><div class="workspace-kpi-top"><span class="workspace-kpi-icon">{% include "partials/sidebar_icon.html" with icon_name="orders" %}</span><span class="workspace-kpi-status">En cours</span></div><small>En cours</small><strong>{{ in_progress_tasks|length }}</strong><p>interventions démarrées</p></article>
+    <article class="workspace-kpi tone-green"><div class="workspace-kpi-top"><span class="workspace-kpi-icon">{% include "partials/sidebar_icon.html" with icon_name="check" %}</span><span class="workspace-kpi-status">Terminées</span></div><small>Terminées</small><strong>{{ done_tasks|length }}</strong><p>sur la période affichée</p></article>
+    <article class="workspace-kpi tone-blue"><div class="workspace-kpi-top"><span class="workspace-kpi-icon">{% include "partials/sidebar_icon.html" with icon_name="bed" %}</span><span class="workspace-kpi-status">Chambres</span></div><small>Chambres concernées</small><strong>{{ my_rooms|length }}</strong><p>{% for r in my_rooms %}{{ r }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}</p></article>
+</section>
+
+<section class="card workspace-panel" style="margin-bottom:20px">
+    <div class="workspace-panel-head">
+        <div>
+            <span class="eyebrow">Chambres · {{ selected_date|date:"d/m/Y" }}</span>
+            <h2>État des chambres & assignations</h2>
+            <p>Vue quotidienne : chaque chambre affiche son état, occupation, tâche active et actions rapides. Utilisez la date pour planifier un autre jour.</p>
+        </div>
+        <div class="actions" style="flex-wrap:wrap">
+            <form method="get" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                <input class="text-input" type="date" name="date" value="{{ selected_date|date:'Y-m-d' }}">
+                <button class="button button-small button-light" type="submit">Voir le jour</button>
+                <a class="button button-small button-light" href="{% url 'workspaces:housekeeping' %}">Aujourd’hui</a>
+                {% if can_manage_housekeeping %}{% if not show_all %}<a class="button button-small button-light" href="?date={{ selected_date|date:'Y-m-d' }}&all=1">Toutes tâches</a>{% else %}<a class="button button-small button-light" href="?date={{ selected_date|date:'Y-m-d' }}">Tâches du jour</a>{% endif %}{% endif %}
+            </form>
+            {% if can_manage_housekeeping %}<a class="button button-small button-light" href="{% url 'workspaces:housekeeping_print' %}?date={{ selected_date|date:'Y-m-d' }}{% if show_all %}&all=1{% endif %}" target="_blank" rel="noopener">Imprimer</a>{% endif %}
+        </div>
+    </div>
+    {% if can_manage_housekeeping %}
+    <details style="margin-bottom:14px"><summary class="button button-small button-light" style="display:inline-flex;cursor:pointer">Assignation en masse</summary>
+        <form method="post" action="{% url 'workspaces:housekeeping_bulk_assign' %}" class="form-grid" style="margin-top:10px">
+            {% csrf_token %}<input type="hidden" name="next" value="{% url 'workspaces:housekeeping' %}?date={{ selected_date|date:'Y-m-d' }}{% if show_all %}&all=1{% endif %}">
+            <label class="field-group"><span class="field-label">Date</span><input class="text-input" type="date" name="date" value="{{ selected_date|date:'Y-m-d' }}"></label>
+            <label class="field-group"><span class="field-label">Type</span><select class="select-input" name="task_type">{% for code,label in task_types %}<option value="{{ code }}">{{ label }}</option>{% endfor %}</select></label>
+            <label class="field-group"><span class="field-label">Compte utilisateur</span><select class="select-input" name="assigned_to"><option value="">— Aucun compte —</option>{% for u in housekeepers %}<option value="{{ u.pk }}">{{ u.get_full_name|default:u.username }}</option>{% endfor %}</select></label>
+            <label class="field-group"><span class="field-label">Agent équipe (sans accès)</span><select class="select-input" name="assigned_staff"><option value="">— Aucun —</option>{% for s in staff_members %}<option value="{{ s.pk }}">{{ s.full_name }}</option>{% endfor %}</select></label>
+            <label class="field-group"><span class="field-label">Nom agent (libre)</span><input class="text-input" name="assigned_name" list="assignee-names" placeholder="Sans compte"></label>
+            <label class="field-group" style="grid-column:1/-1"><span class="field-label">Chambres</span><div style="display:flex;flex-wrap:wrap;gap:8px">{% for room in rooms %}<label style="display:flex;gap:4px;align-items:center;font-size:13px"><input type="checkbox" name="rooms" value="{{ room.pk }}"> {{ room.number }}</label>{% endfor %}</div></label>
+            <label class="field-group" style="grid-column:1/-1"><span class="field-label">Notes</span><input class="text-input" name="notes"></label>
+            <div class="form-actions"><button class="button" type="submit">Créer les tâches sélectionnées</button></div>
+        </form>
+    </details>
+    {% endif %}
+    <div class="room-card-grid room-card-grid-rich" style="margin-bottom:18px">
+        {% for card in room_cards %}
+        <article class="room-card room-card-rich {% if card.task %}status-{{ card.task.status|lower }}{% elif card.is_occupied %}status-in_progress{% elif card.is_reserved %}status-pending{% else %}status-available{% endif %}">
+            <div class="room-card-top">
+                <span class="room-card-num">Ch. {{ card.room.number }}</span>
+                {% if card.task %}
+                <span class="{{ card.task.status|badge_class }}">{{ card.task.get_status_display }}</span>
+                {% elif card.is_occupied %}
+                <span class="status-badge status-warning">Occupée</span>
+                {% elif card.is_reserved %}
+                <span class="status-badge status-info">Réservée</span>
+                {% else %}
+                <span class="status-badge status-success">Disponible</span>
+                {% endif %}
+            </div>
+            <p class="room-card-type">{{ card.room.room_type.name }} · Étage {{ card.room.floor }}</p>
+            <div class="room-card-stay" style="cursor:default">
+                {% if card.reservation %}<strong>{{ card.reservation.customer }}</strong><span>{{ card.reservation.get_status_display }} · {{ card.reservation.check_in|date:"d/m" }}→{{ card.reservation.check_out|date:"d/m" }}</span>{% else %}<strong>Aucun client ce jour</strong><span>Chambre libre sur la date sélectionnée</span>{% endif %}
+                {% if card.task %}<span>{{ card.task.get_task_type_display }} · {{ card.task.assignee_label }}</span><span>Prévue : {{ card.task.scheduled_date|date:"d/m/Y" }}</span>{% else %}<span class="muted">Aucune tâche active</span>{% endif %}
+            </div>
+            {% if card.task %}
+            <form method="post" action="{% url 'workspaces:housekeeping_note' card.task.pk %}" style="margin-top:8px;display:flex;gap:6px">
+                {% csrf_token %}<input type="hidden" name="next" value="{% url 'workspaces:housekeeping' %}?date={{ selected_date|date:'Y-m-d' }}{% if show_all %}&all=1{% endif %}">
+                <input class="text-input" name="notes" value="{{ card.task.notes }}" placeholder="Note / problème…" style="font-size:12px">
+                <button class="button button-small button-light" type="submit">Note</button>
+            </form>
+            <div class="desk-row-actions" style="margin-top:8px;flex-wrap:wrap">
+                {% if card.can_update and card.task.status == 'PENDING' %}
+                <form method="post" action="{% url 'workspaces:housekeeping_status' card.task.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{% url 'workspaces:housekeeping' %}?date={{ selected_date|date:'Y-m-d' }}{% if show_all %}&all=1{% endif %}"><input type="hidden" name="status" value="IN_PROGRESS"><button class="button button-small button-light" type="submit">Démarrer</button></form>
+                {% elif card.can_update and card.task.status == 'IN_PROGRESS' %}
+                <form method="post" action="{% url 'workspaces:housekeeping_status' card.task.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{% url 'workspaces:housekeeping' %}?date={{ selected_date|date:'Y-m-d' }}{% if show_all %}&all=1{% endif %}"><input type="hidden" name="status" value="DONE"><button class="button button-small" type="submit">Terminer</button></form>
+                {% endif %}
+                {% if card.can_update and card.task.status != 'PENDING' %}
+                <form method="post" action="{% url 'workspaces:housekeeping_status' card.task.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{% url 'workspaces:housekeeping' %}?date={{ selected_date|date:'Y-m-d' }}{% if show_all %}&all=1{% endif %}"><input type="hidden" name="status" value="PENDING"><button class="button button-small button-light" type="submit">Remettre à faire</button></form>
+                {% endif %}
+                {% if can_manage_housekeeping %}
+                <form method="post" action="{% url 'workspaces:housekeeping_delete' card.task.pk %}" onsubmit="return confirm('Supprimer cette tâche ?')">{% csrf_token %}<input type="hidden" name="next" value="{% url 'workspaces:housekeeping' %}?date={{ selected_date|date:'Y-m-d' }}{% if show_all %}&all=1{% endif %}"><button class="button button-small button-light" type="submit">Supprimer</button></form>
+                {% endif %}
+            </div>
+            {% else %}
+            {% if can_manage_housekeeping %}
+            <form method="post" style="margin-top:10px;display:grid;gap:6px">
+                {% csrf_token %}
+                <input type="hidden" name="room" value="{{ card.room.pk }}">
+                <input type="hidden" name="scheduled_date" value="{{ selected_date|date:'Y-m-d' }}">
+                <label class="field-group" style="gap:4px"><span class="field-label">Action rapide</span><select class="select-input" name="task_type">{% for code,label in task_types %}<option value="{{ code }}">{{ label }}</option>{% endfor %}</select></label>
+                <select class="select-input" name="assigned_staff"><option value="">— Agent équipe (sans accès) —</option>{% for s in staff_members %}<option value="{{ s.pk }}">{{ s.full_name }}</option>{% endfor %}</select>
+                <select class="select-input" name="assigned_to"><option value="">— Compte utilisateur —</option>{% for u in housekeepers %}<option value="{{ u.pk }}">{{ u.get_full_name|default:u.username }}</option>{% endfor %}</select>
+                <input class="text-input" name="assigned_name" placeholder="Nom libre / équipe" list="assignee-names">
+                <button class="button button-small" type="submit">Assigner pour {{ selected_date|date:"d/m" }}</button>
+            </form>
+            {% else %}
+            <p class="muted" style="font-size:12px;margin-top:8px">Aucune tâche active. Signalez au responsable si nécessaire.</p>
+            {% endif %}
+            {% endif %}
+        </article>
+        {% endfor %}
+    </div>
+    {% if can_manage_housekeeping %}
+    <details>
+        <summary class="button button-small button-light" style="display:inline-flex;cursor:pointer">Créer une tâche détaillée</summary>
+        <form method="post" class="form-grid" style="margin-top:12px">
+            {% csrf_token %}
+            <label class="field-group"><span class="field-label">Chambre</span><select class="select-input" name="room" required><option value="">Sélectionner…</option>{% for room in rooms %}<option value="{{ room.pk }}">{{ room.number }} · {{ room.room_type.name }}</option>{% endfor %}</select></label>
+            <label class="field-group"><span class="field-label">Type</span><select class="select-input" name="task_type">{% for code,label in task_types %}<option value="{{ code }}">{{ label }}</option>{% endfor %}</select></label>
+            <label class="field-group"><span class="field-label">Date prévue</span><input class="text-input" type="date" name="scheduled_date" value="{{ selected_date|date:'Y-m-d' }}"></label>
+            <label class="field-group"><span class="field-label">Compte utilisateur (optionnel)</span><select class="select-input" name="assigned_to"><option value="">— Aucun compte —</option>{% for u in housekeepers %}<option value="{{ u.pk }}">{{ u.get_full_name|default:u.username }}</option>{% endfor %}</select></label>
+            <label class="field-group"><span class="field-label">Agent équipe (sans accès)</span><select class="select-input" name="assigned_staff"><option value="">— Aucun —</option>{% for s in staff_members %}<option value="{{ s.pk }}">{{ s.full_name }}</option>{% endfor %}</select></label>
+            <label class="field-group"><span class="field-label">Nom agent (libre)</span><input class="text-input" name="assigned_name" placeholder="Ex: Amina" list="assignee-names"></label>
+            <label class="field-group" style="grid-column:1/-1"><span class="field-label">Notes</span><input class="text-input" name="notes" placeholder="Instructions, priorité, zone…"></label>
+            <div class="form-actions" style="align-self:end"><button class="button" type="submit">Créer la tâche</button></div>
+        </form>
+    </details>
+    {% endif %}
+    {% if can_manage_housekeeping %}<datalist id="assignee-names">{% for n in assignee_names %}<option value="{{ n }}">{% endfor %}</datalist>{% endif %}
+</section>
+
+<section class="card workspace-panel">
+    <div class="workspace-panel-head" style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap">
+        <div>
+            <span class="eyebrow">Tâches</span>
+            <h2>{% if is_housekeeper %}Tâches housekeeping{% else %}Planning housekeeping{% endif %}</h2>
+            <p>{% if is_housekeeper %}Gérez vos tâches, signalez problèmes, et suivez l’équipe terrain sans accès plateforme.{% else %}Date affichée : {{ selected_date|date:"d/m/Y" }}. Imprimez la liste pour les agents de terrain.{% endif %}</p>
+        </div>
+        <div class="actions" style="flex-wrap:wrap">
+            <a class="button button-small button-light" href="{% url 'workspaces:housekeeping_print' %}?date={{ selected_date|date:'Y-m-d' }}{% if show_all %}&all=1{% endif %}" target="_blank" rel="noopener">Imprimer la liste</a>
+        </div>
+    </div>
+    <details style="margin-bottom:16px"><summary class="button button-small button-light" style="display:inline-flex;cursor:pointer">Équipe housekeeping (sans accès plateforme)</summary>
+        <div class="form-grid" style="margin-top:12px">
+            <form method="post" action="{% url 'workspaces:housekeeping_staff_create' %}" class="form-grid" style="grid-column:1/-1">
+                {% csrf_token %}<input type="hidden" name="next" value="{% url 'workspaces:housekeeping' %}?date={{ selected_date|date:'Y-m-d' }}{% if show_all %}&all=1{% endif %}">
+                <label class="field-group"><span class="field-label">Prénom</span><input class="text-input" name="first_name" required></label>
+                <label class="field-group"><span class="field-label">Nom</span><input class="text-input" name="last_name"></label>
+                <label class="field-group"><span class="field-label">Téléphone</span><input class="text-input" name="phone"></label>
+                <label class="field-group"><span class="field-label">Fonction</span><input class="text-input" name="role_title" value="Agent housekeeping"></label>
+                <div class="form-actions"><button class="button button-small" type="submit">Ajouter agent</button></div>
+            </form>
+            <div class="table-wrap" style="grid-column:1/-1"><table class="data-table" style="margin:0"><thead><tr><th>Agent</th><th>Fonction</th><th>Téléphone</th><th>Statut</th><th></th></tr></thead><tbody>
+            {% for s in staff_members %}<tr><td><strong>{{ s.full_name }}</strong></td><td>{{ s.role_title|default:"—" }}</td><td>{{ s.phone|default:"—" }}</td><td><span class="status-badge status-success">Actif</span></td><td><form method="post" action="{% url 'workspaces:housekeeping_staff_toggle' s.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{% url 'workspaces:housekeeping' %}?date={{ selected_date|date:'Y-m-d' }}{% if show_all %}&all=1{% endif %}"><button class="button button-small button-light" type="submit">Désactiver</button></form></td></tr>{% empty %}<tr><td colspan="5"><p class="muted" style="margin:10px">Aucun agent équipe enregistré.</p></td></tr>{% endfor %}
+            </tbody></table></div>
+        </div>
+    </details>
+    <details style="margin-bottom:16px"><summary class="button button-small button-light" style="display:inline-flex;cursor:pointer">Créer un client rapidement</summary>
+        <form method="post" action="{% url 'workspaces:housekeeping_customer_create' %}" class="form-grid" style="margin-top:12px">
+            {% csrf_token %}<input type="hidden" name="next" value="{% url 'workspaces:housekeeping' %}?date={{ selected_date|date:'Y-m-d' }}{% if show_all %}&all=1{% endif %}">
+            <p class="muted" style="grid-column:1/-1;margin:0">Utile quand housekeeping accueille/identifie un client sur place. Pour réservation/facturation complète, utilisez la Réception.</p>
+            <label class="field-group"><span class="field-label">Prénom</span><input class="text-input" name="first_name" required></label>
+            <label class="field-group"><span class="field-label">Nom</span><input class="text-input" name="last_name" required></label>
+            <label class="field-group"><span class="field-label">Téléphone</span><input class="text-input" name="phone"></label>
+            <label class="field-group"><span class="field-label">Email</span><input class="text-input" name="email" type="email"></label>
+            <label class="field-group"><span class="field-label">Type pièce</span><select class="select-input" name="id_type"><option value="CNI">CNI</option><option value="PASSPORT">Passeport</option><option value="OTHER" selected>Autre</option></select></label>
+            <label class="field-group"><span class="field-label">N° pièce (optionnel)</span><input class="text-input" name="id_number" placeholder="Auto si vide"></label>
+            <div class="form-actions"><button class="button button-small" type="submit">Créer client</button></div>
+        </form>
+    </details>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Chambre</th><th>Type</th><th>Assignée à</th><th>Date</th><th>Statut</th><th>Notes</th><th>Action</th></tr></thead>
+            <tbody>
+                {% for task in tasks %}
+                <tr>
+                    <td><strong>{{ task.room.number }}</strong><small class="muted">{{ task.room.room_type.name }}</small></td>
+                    <td>{{ task.get_task_type_display }}</td>
+                    <td>
+                        {% if can_manage_housekeeping %}
+                        <form method="post" action="{% url 'workspaces:housekeeping_assign' task.pk %}" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+                            {% csrf_token %}<input type="hidden" name="next" value="{% url 'workspaces:housekeeping' %}?date={{ selected_date|date:'Y-m-d' }}{% if show_all %}&all=1{% endif %}">
+                            <select name="assigned_to" class="select-input" style="min-width:0;flex:1 1 120px"><option value="">— Compte —</option>{% for u in housekeepers %}<option value="{{ u.pk }}" {% if task.assigned_to_id == u.pk %}selected{% endif %}>{{ u.get_full_name|default:u.username }}</option>{% endfor %}</select>
+                            <select name="assigned_staff" class="select-input" style="min-width:0;flex:1 1 120px"><option value="">— Équipe —</option>{% for s in staff_members %}<option value="{{ s.pk }}" {% if task.assigned_staff_id == s.pk %}selected{% endif %}>{{ s.full_name }}</option>{% endfor %}</select>
+                            <input class="text-input" name="assigned_name" value="{{ task.assigned_name }}" placeholder="Nom libre" list="assignee-names" style="min-width:0;flex:1 1 100px">
+                            <button class="button button-small button-light" type="submit">OK</button>
+                        </form>
+                        {% else %}
+                        {{ task.assignee_label }}
+                        {% endif %}
+                    </td>
+                    <td>{{ task.scheduled_date|date:"d/m/Y" }}</td>
+                    <td><span class="{{ task.status|badge_class }}">{{ task.get_status_display }}</span></td>
+                    <td>
+                        <form method="post" action="{% url 'workspaces:housekeeping_note' task.pk %}" style="display:flex;gap:6px">{% csrf_token %}<input type="hidden" name="next" value="{% url 'workspaces:housekeeping' %}?date={{ selected_date|date:'Y-m-d' }}{% if show_all %}&all=1{% endif %}"><input class="text-input" name="notes" value="{{ task.notes }}" placeholder="Note…" style="min-width:0;flex:1 1 140px"><button class="button button-small button-light" type="submit">OK</button></form>
+                    </td>
+                    <td class="desk-row-actions">
+                        {% if task.status == 'PENDING' %}
+                        <form method="post" action="{% url 'workspaces:housekeeping_status' task.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{% url 'workspaces:housekeeping' %}?date={{ selected_date|date:'Y-m-d' }}{% if show_all %}&all=1{% endif %}"><input type="hidden" name="status" value="IN_PROGRESS"><button class="button button-small button-light" type="submit">Démarrer</button></form>
+                        {% elif task.status == 'IN_PROGRESS' %}
+                        <form method="post" action="{% url 'workspaces:housekeeping_status' task.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{% url 'workspaces:housekeeping' %}?date={{ selected_date|date:'Y-m-d' }}{% if show_all %}&all=1{% endif %}"><input type="hidden" name="status" value="DONE"><button class="button button-small" type="submit">Terminer</button></form>
+                        <form method="post" action="{% url 'workspaces:housekeeping_status' task.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{% url 'workspaces:housekeeping' %}?date={{ selected_date|date:'Y-m-d' }}{% if show_all %}&all=1{% endif %}"><input type="hidden" name="status" value="PENDING"><button class="button button-small button-light" type="submit">Reprendre</button></form>
+                        {% else %}
+                        <span class="muted">Clôturée{% if task.completion_date %} · {{ task.completion_date|date:"d/m" }}{% endif %}</span>
+                        {% endif %}
+                        {% if can_manage_housekeeping %}
+                        <form method="post" action="{% url 'workspaces:housekeeping_delete' task.pk %}" onsubmit="return confirm('Supprimer cette tâche ?')">{% csrf_token %}<input type="hidden" name="next" value="{% url 'workspaces:housekeeping' %}?date={{ selected_date|date:'Y-m-d' }}{% if show_all %}&all=1{% endif %}"><button class="button button-small button-light" type="submit">Suppr.</button></form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="7" class="muted" style="padding:26px;text-align:center">Aucune tâche pour cette période.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

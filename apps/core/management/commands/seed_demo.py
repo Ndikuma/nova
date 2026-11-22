@@ -102,6 +102,16 @@ ROLE_ACCOUNTS = [
         False,
     ),
     (
+        'housekeeping',
+        'Aminata',
+        'Diallo',
+        'Housekeeper',
+        'House@Nova2026',
+        'Housekeeping',
+        False,
+        False,
+    ),
+    (
         'serveur',
         'Yao',
         'Kouassi',
@@ -156,8 +166,10 @@ class Command(BaseCommand):
         group_names = [
             'Superadmin',
             'Owner',
+            'Comptable',
             'Chef',
             'Receptionist',
+            'Housekeeper',
             'Waiter',
             'Cashier',
             'Bartender',
@@ -303,8 +315,10 @@ class Command(BaseCommand):
         role_group_mapping = {
             'superadmin': 'Superadmin',
             'owner': 'Owner',
+            'comptable': 'Comptable',
             'chef': 'Chef',
             'receptionniste': 'Receptionist',
+            'housekeeping': 'Housekeeper',
             'serveur': 'Waiter',
             'caissier': 'Cashier',
             'barman': 'Bartender',

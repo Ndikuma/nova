@@ -20,6 +20,7 @@
         <a class="button button-light" href="{% url 'reports:receipt_print' object.pk %}" target="_blank" rel="noopener">Imprimer le reçu</a>
         <a class="button button-light" href="{% url 'reports:receipt_pdf' object.pk %}">PDF</a>
         {% endif %}
+        {% if can_reset_password %}<a class="button button-light" href="{% url 'entity_reset_password' module entity object.pk %}">Réinitialiser mot de passe</a>{% endif %}
         {% if not posted_record and not read_only_record %}<a class="button" href="{% url 'entity_edit' module entity object.pk %}">Modifier</a>{% endif %}
         <a class="button button-light" href="{% url 'entity_list' module entity %}">Retour à la liste</a>
     </div>
@@ -92,6 +93,16 @@
             {% endfor %}
         </div>
         {% endif %}
+        {% if created_by or updated_by %}
+        <div class="detail-section-head" style="margin-top:20px">
+            <h3>Traçabilité</h3>
+            <p>Création et dernière modification</p>
+        </div>
+        <div class="detail-grid">
+            {% if created_by %}<div class="detail-item"><span class="detail-label">Créé par</span><span class="detail-value">{{ created_by }}</span></div>{% endif %}
+            {% if updated_by %}<div class="detail-item"><span class="detail-label">Dernière modification par</span><span class="detail-value">{{ updated_by }}</span></div>{% endif %}
+        </div>
+        {% endif %}
         {% if related_payments != None %}
         <div class="detail-section-head" style="margin-top:20px">
             <h3>Paiements</h3>
@@ -143,10 +154,10 @@
                 <form method="post" action="{% url 'workspaces:reservation_check_in' object.pk %}" style="margin:0">{% csrf_token %}<button class="button" type="submit">Check-in (créer le séjour)</button></form>
                 {% endif %}
                 {% if reservation_actions.can_manage and reservation_actions.can_prepare_checkout %}
-                <form method="post" action="{% url 'workspaces:reservation_prepare_checkout' object.pk %}" style="margin:0">{% csrf_token %}<button class="button button-light" type="submit">{% if reservation_actions.invoice %}Actualiser facture{% else %}Préparer facture départ{% endif %}</button></form>
+                <form method="post" action="{% url 'workspaces:reservation_prepare_checkout' object.pk %}" style="margin:0">{% csrf_token %}<input type="hidden" name="next" value="{% url 'entity_detail' module entity object.pk %}"><button class="button button-light" type="submit">{% if reservation_actions.invoice %}Actualiser facture{% else %}Préparer facture{% endif %}</button></form>
                 {% endif %}
                 {% if reservation_actions.can_collect_payment %}
-                <a class="button" href="{% url 'workspaces:payment_create' reservation_actions.invoice.pk %}">Encaisser le solde ({{ reservation_actions.invoice.balance|money }})</a>
+                <form method="post" action="{% url 'workspaces:reservation_collect' object.pk %}" style="margin:0">{% csrf_token %}<input type="hidden" name="next" value="{% url 'entity_detail' module entity object.pk %}"><button class="button" type="submit">Encaisser{% if reservation_actions.invoice and reservation_actions.invoice.balance > 0 %} ({{ reservation_actions.invoice.balance|money }}){% endif %}</button></form>
                 {% endif %}
                 {% if reservation_actions.can_manage and reservation_actions.can_check_out %}
                 <form method="post" action="{% url 'workspaces:reservation_check_out' object.pk %}" style="margin:0">{% csrf_token %}<button class="button" type="submit">Check-out (clôturer)</button></form>
@@ -155,7 +166,13 @@
                 <form method="post" action="{% url 'workspaces:reservation_cancel' object.pk %}" style="margin:0" onsubmit="return confirm('Annuler cette réservation ?');">{% csrf_token %}<button class="button danger-button" type="submit">Annuler la réservation</button></form>
                 {% endif %}
             </div>
-            <p class="muted" style="margin-top:10px;font-size:12px">Le séjour est créé automatiquement au check-in. Le check-out n’est possible qu’après encaissement du solde.</p>
+            <p class="muted" style="margin-top:10px;font-size:12px">Le séjour est créé automatiquement au check-in. Vous pouvez encaisser un acompte à tout moment (avant ou pendant le séjour). Pour une consommation du client en séjour, passez la commande depuis Service/Bar puis utilisez « Imputer chambre » ou « Encaisser ».</p>
+            {% if reservation_actions.can_manage %}
+            <div class="desk-row-actions" style="margin-top:10px;flex-wrap:wrap">
+                <a class="button button-small button-light" href="{% url 'workspaces:service_order_create' %}?next=service">Commande restaurant</a>
+                <a class="button button-small button-light" href="{% url 'workspaces:bar_order_create' %}?next=bar">Commande bar</a>
+            </div>
+            {% endif %}
         </article>
         {% if reservation_actions.invoice %}
         <article class="card">

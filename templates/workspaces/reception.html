@@ -53,7 +53,8 @@
                     <p>Chambres disponibles, occupées, en ménage ou hors service.</p>
                 </div>
                 <div class="actions">
-                    <a class="button button-small button-light" href="{% url 'workspaces:service_order_create' %}">Commande restaurant</a>
+                    <a class="button button-small button-light" href="{% url 'workspaces:bar_order_create' %}?next=service">Commande bar</a>
+                    <a class="button button-small button-light" href="{% url 'workspaces:service_order_create' %}?next=service">Commande restaurant</a>
                     <a class="button button-small" href="{% url 'workspaces:reservation_create' %}">Nouvelle réservation</a>
                 </div>
             </div>
@@ -104,13 +105,14 @@
                         {% if card.reservation.status == 'CONFIRMED' and card.reservation.check_in <= today %}
                         <form method="post" action="{% url 'workspaces:reservation_check_in' card.reservation.pk %}">{% csrf_token %}<button class="button button-small" type="submit">Check-in</button></form>
                         {% endif %}
-                        {% if card.reservation.status == 'CHECKED_IN' %}
+                        {% if card.reservation.status in 'CONFIRMED,CHECKED_IN' %}
                             {% if not card.reservation.invoice or card.reservation.invoice.balance > 0 %}
-                            <form method="post" action="{% url 'workspaces:reservation_prepare_checkout' card.reservation.pk %}">{% csrf_token %}<button class="button button-small button-light" type="submit">{% if card.reservation.invoice %}Facture{% else %}Préparer facture{% endif %}</button></form>
+                            <form method="post" action="{% url 'workspaces:reservation_prepare_checkout' card.reservation.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{% url 'workspaces:reception' %}"><button class="button button-small button-light" type="submit">{% if card.reservation.invoice %}Facture{% else %}Préparer facture{% endif %}</button></form>
                             {% endif %}
-                            {% if card.reservation.invoice and card.reservation.invoice.balance > 0 and can_collect %}
-                            <a class="button button-small" href="{% url 'workspaces:payment_create' card.reservation.invoice.pk %}">Encaisser</a>
-                            {% elif card.reservation.invoice and card.reservation.invoice.balance <= 0 %}
+                            {% if can_collect %}
+                            <form method="post" action="{% url 'workspaces:reservation_collect' card.reservation.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{% url 'workspaces:reception' %}"><button class="button button-small" type="submit">Encaisser</button></form>
+                            {% endif %}
+                            {% if card.reservation.status == 'CHECKED_IN' and card.reservation.invoice and card.reservation.invoice.balance <= 0 %}
                             <form method="post" action="{% url 'workspaces:reservation_check_out' card.reservation.pk %}">{% csrf_token %}<button class="button button-small" type="submit">Check-out</button></form>
                             {% endif %}
                         {% endif %}
@@ -166,8 +168,11 @@
                         <div class="desk-row-actions">
                             {% if not reservation.departure_invoice or reservation.departure_invoice.balance > 0 %}
                             <form method="post" action="{% url 'workspaces:reservation_prepare_checkout' reservation.pk %}">
-                                {% csrf_token %}<button class="button button-small button-light" type="submit">{% if reservation.departure_invoice %}Actualiser facture{% else %}Préparer facture{% endif %}</button>
+                                {% csrf_token %}<input type="hidden" name="next" value="{% url 'workspaces:reception' %}"><button class="button button-small button-light" type="submit">{% if reservation.departure_invoice %}Actualiser facture{% else %}Préparer facture{% endif %}</button>
                             </form>
+                            {% endif %}
+                            {% if reservation.departure_invoice and reservation.departure_invoice.balance > 0 and can_collect %}
+                            <form method="post" action="{% url 'workspaces:reservation_collect' reservation.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{% url 'workspaces:reception' %}"><button class="button button-small" type="submit">Encaisser</button></form>
                             {% endif %}
                             {% if reservation.departure_invoice and reservation.departure_invoice.balance <= 0 %}
                             <form method="post" action="{% url 'workspaces:reservation_check_out' reservation.pk %}">
@@ -238,10 +243,16 @@
         </article>
 
         <article class="card workspace-panel">
-            <div class="workspace-panel-head">
-                <span class="eyebrow">Housekeeping</span>
-                <h2>Tâches de ménage</h2>
-                <p>Préparation des chambres et suivi des interventions.</p>
+            <div class="workspace-panel-head" style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start">
+                <div>
+                    <span class="eyebrow">Housekeeping</span>
+                    <h2>Tâches de ménage</h2>
+                    <p>Assignez les chambres, suivez les interventions et imprimez la liste.</p>
+                </div>
+                <div class="actions">
+                    <a class="button button-small button-light" href="{% url 'workspaces:housekeeping' %}">Espace housekeeping</a>
+                    <a class="button button-small button-light" href="javascript:window.print()">Imprimer</a>
+                </div>
             </div>
             <div class="table-wrap">
                 <table>
@@ -251,18 +262,26 @@
                         <tr>
                             <td><span class="record-title">{{ task.room.number }}</span></td>
                             <td>{{ task.get_task_type_display }}</td>
-                            <td>{{ task.assigned_to|default:"Non assignée" }}</td>
+                            <td>
+                                <form method="post" action="{% url 'workspaces:housekeeping_assign' task.pk %}" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+                                    {% csrf_token %}<input type="hidden" name="next" value="{% url 'workspaces:reception' %}">
+                                    <select name="assigned_to" class="select-input" style="min-width:0;flex:1 1 120px"><option value="">— Compte —</option>{% for hk in housekeepers %}<option value="{{ hk.pk }}" {% if task.assigned_to_id == hk.pk %}selected{% endif %}>{{ hk.get_full_name|default:hk.username }}</option>{% endfor %}</select>
+                                    <select name="assigned_staff" class="select-input" style="min-width:0;flex:1 1 120px"><option value="">— Équipe —</option>{% for s in housekeeping_staff %}<option value="{{ s.pk }}" {% if task.assigned_staff_id == s.pk %}selected{% endif %}>{{ s.full_name }}</option>{% endfor %}</select>
+                                    <input class="text-input" name="assigned_name" value="{{ task.assigned_name }}" placeholder="Nom libre" style="min-width:0;flex:1 1 100px">
+                                    <button class="button button-small button-light" type="submit">OK</button>
+                                </form>
+                            </td>
                             <td>{{ task.scheduled_date|date:"d/m/Y" }}</td>
                             <td><span class="{{ task.status|badge_class }}">{{ task.get_status_display }}</span></td>
                             <td class="desk-row-actions">
                                 {% if task.status == 'PENDING' %}
                                 <form method="post" action="{% url 'workspaces:housekeeping_status' task.pk %}">
-                                    {% csrf_token %}<input type="hidden" name="status" value="IN_PROGRESS">
+                                    {% csrf_token %}<input type="hidden" name="next" value="{% url 'workspaces:reception' %}"><input type="hidden" name="status" value="IN_PROGRESS">
                                     <button class="button button-small button-light" type="submit">Démarrer</button>
                                 </form>
                                 {% elif task.status == 'IN_PROGRESS' %}
                                 <form method="post" action="{% url 'workspaces:housekeeping_status' task.pk %}">
-                                    {% csrf_token %}<input type="hidden" name="status" value="DONE">
+                                    {% csrf_token %}<input type="hidden" name="next" value="{% url 'workspaces:reception' %}"><input type="hidden" name="status" value="DONE">
                                     <button class="button button-small" type="submit">Terminer</button>
                                 </form>
                                 {% endif %}

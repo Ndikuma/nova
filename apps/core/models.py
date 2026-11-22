@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.core.validators import RegexValidator
 from django.db import models
@@ -8,6 +9,14 @@ class User(AbstractUser):
     phone = models.CharField(max_length=30, blank=True)
     job_title = models.CharField(max_length=120, blank=True)
     avatar = models.ImageField(upload_to='avatars/', blank=True, null=True)
+    created_by = models.ForeignKey(
+        'self', null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='created_users', editable=False,
+    )
+    updated_by = models.ForeignKey(
+        'self', null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='updated_users', editable=False,
+    )
 
     def __str__(self):
         return self.get_full_name() or self.username
@@ -36,6 +45,15 @@ class Customer(models.Model):
             models.UniqueConstraint(fields=['is_walk_in'], condition=models.Q(is_walk_in=True), name='customer_single_walk_in'),
         ]
 
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', editable=False,
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', editable=False,
+    )
+
     def __str__(self):
         return f'{self.first_name} {self.last_name}'.strip()
 
@@ -51,6 +69,37 @@ class AuditLog(models.Model):
     def __str__(self):
         actor = self.user or 'Système'
         return f'{self.action} · {self.object_type} #{self.object_id} · {actor}'
+
+
+class HousekeepingStaff(models.Model):
+    """Agent housekeeping terrain, sans accès plateforme."""
+    first_name = models.CharField('Prénom', max_length=80)
+    last_name = models.CharField('Nom', max_length=80, blank=True)
+    phone = models.CharField('Téléphone', max_length=30, blank=True)
+    role_title = models.CharField('Rôle / fonction', max_length=80, default='Agent housekeeping')
+    active = models.BooleanField('Actif', default=True)
+    notes = models.TextField('Notes', blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='created_housekeeping_staff', editable=False,
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='updated_housekeeping_staff', editable=False,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['first_name', 'last_name']
+        verbose_name = 'Agent housekeeping'
+        verbose_name_plural = 'Agents housekeeping'
+
+    @property
+    def full_name(self):
+        return f'{self.first_name} {self.last_name}'.strip()
+
+    def __str__(self):
+        return self.full_name
 
 
 class CompanyProfile(models.Model):

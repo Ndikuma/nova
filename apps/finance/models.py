@@ -31,6 +31,15 @@ class Invoice(models.Model):
     def is_payable(self):
         return self.status in self.PAYABLE_STATUSES and self.balance > 0
 
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', editable=False,
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', editable=False,
+    )
+
     def __str__(self):
         return f'Facture {self.number} · {self.customer} · {self.get_status_display()}'
 
@@ -57,6 +66,15 @@ class PaymentMethod(models.Model):
     active = models.BooleanField(default=True)
     is_cash = models.BooleanField('Paiement en espèces', default=False)
 
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', editable=False,
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', editable=False,
+    )
+
     def __str__(self):
         return self.name
 
@@ -70,6 +88,11 @@ class Payment(models.Model):
     status = models.CharField(max_length=20, default='COMPLETED')
     received_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
 
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', editable=False,
+    )
+
     def __str__(self):
         return f'Paiement #{self.pk or "nouveau"} · {self.invoice.number} · {self.amount}'
 
@@ -77,6 +100,15 @@ class Payment(models.Model):
 class ExpenseCategory(models.Model):
     name = models.CharField(max_length=100, unique=True)
     active = models.BooleanField(default=True)
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', editable=False,
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', editable=False,
+    )
 
     def __str__(self):
         return self.name
@@ -91,6 +123,15 @@ class Expense(models.Model):
     responsible_user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     reference = models.CharField(max_length=120, blank=True)
 
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', editable=False,
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', editable=False,
+    )
+
     def __str__(self):
         return f'{self.description} · {self.amount}'
 
@@ -102,6 +143,11 @@ class Refund(models.Model):
     date = models.DateTimeField(auto_now_add=True)
     responsible_user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     status = models.CharField(max_length=20, default='COMPLETED')
+
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', editable=False,
+    )
 
     def __str__(self):
         return f'Remboursement #{self.pk or "nouveau"} · {self.payment.invoice.number} · {self.amount}'

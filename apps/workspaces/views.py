@@ -52,14 +52,16 @@ ZERO = Decimal('0')
 WORKSPACE_HOME = {
     'Superadmin': 'workspaces:superadmin',
     'Owner': 'workspaces:owner',
+    'Comptable': 'workspaces:finance_balance',
     'Chef': 'workspaces:kitchen',
     'Receptionist': 'workspaces:reception',
+    'Housekeeper': 'workspaces:housekeeping',
     'Waiter': 'workspaces:service',
     'Cashier': 'workspaces:cashier',
     'Bartender': 'workspaces:bar',
 }
-ROLE_PRIORITY = ('Superadmin', 'Owner', 'Chef', 'Receptionist', 'Waiter', 'Cashier', 'Bartender')
-COLLECT_ROLES = ('Cashier', 'Owner', 'Receptionist', 'Waiter', 'Bartender', 'Chef')
+ROLE_PRIORITY = ('Superadmin', 'Owner', 'Comptable', 'Chef', 'Receptionist', 'Housekeeper', 'Waiter', 'Cashier', 'Bartender')
+COLLECT_ROLES = ('Cashier', 'Owner', 'Receptionist', 'Waiter', 'Bartender', 'Chef', 'Comptable')
 
 
 def _groups(user):
@@ -490,6 +492,9 @@ def reception_workspace(request):
     pending_request_count = pending_requests.count()
 
     can_collect = _has_role(request.user, COLLECT_ROLES)
+    housekeepers = get_user_model().objects.filter(groups__name='Housekeeper', is_active=True).order_by('first_name', 'username')
+    from apps.core.models import HousekeepingStaff
+    housekeeping_staff = HousekeepingStaff.objects.filter(active=True).order_by('first_name', 'last_name')
     context = {
         'today': today,
         'tomorrow': tomorrow,
@@ -505,6 +510,8 @@ def reception_workspace(request):
         'invoice_statuses': Invoice.STATUS,
         'housekeeping_tasks': housekeeping_open,
         'housekeeping_count': housekeeping_open.count(),
+        'housekeepers': housekeepers,
+        'housekeeping_staff': housekeeping_staff,
         'recent_customers': recent_customers,
         'audit_logs': audit_logs,
         'avail_from': avail_from,
@@ -704,8 +711,9 @@ def reservation_check_in(request, pk):
 @role_required('Receptionist', 'Owner')
 def reservation_prepare_checkout(request, pk):
     reservation = get_object_or_404(Reservation, pk=pk)
+    next_url = request.POST.get('next') or request.META.get('HTTP_REFERER') or reverse('workspaces:reception')
     if request.method != 'POST':
-        return redirect('workspaces:reception')
+        return redirect(next_url)
     try:
         invoice = prepare_checkout(reservation, request.user)
     except ValueError as exc:
@@ -715,7 +723,25 @@ def reservation_prepare_checkout(request, pk):
             request,
             f'Facture {invoice.number} préparée. Solde à encaisser : {invoice.balance} F.',
         )
-    return redirect('workspaces:reception')
+    return redirect(next_url)
+
+
+@role_required(*COLLECT_ROLES)
+@transaction.atomic
+def reservation_collect(request, pk):
+    reservation = get_object_or_404(Reservation, pk=pk)
+    next_url = request.POST.get('next') or request.META.get('HTTP_REFERER') or reverse('workspaces:reception')
+    if request.method != 'POST':
+        return redirect(next_url)
+    try:
+        invoice = invoice_for_reservation(reservation, request.user)
+    except Exception as exc:
+        messages.error(request, str(exc))
+        return redirect(next_url)
+    if invoice.balance <= ZERO:
+        messages.info(request, 'Cette facture est déjà soldée.')
+        return redirect(next_url)
+    return redirect(f"{reverse('workspaces:payment_create', args=[invoice.pk])}?next={next_url}")
 
 
 @role_required('Receptionist', 'Owner')
@@ -754,19 +780,281 @@ def reservation_cancel(request, pk):
     return redirect(next_url)
 
 
+def _housekeeping_context(request, *, for_print=False):
+    today = timezone.localdate()
+    roles = set(_groups(request.user))
+    is_housekeeper_only = 'Housekeeper' in roles and not (request.user.is_superuser or 'Owner' in roles or 'Receptionist' in roles)
+    can_manage = request.user.is_superuser or bool({'Owner', 'Receptionist'} & roles)
+    selected_date = _parse_date(request.GET.get('date'), today)
+    show_all = request.GET.get('all') == '1' and can_manage
+
+    tasks_qs = HousekeepingTask.objects.select_related('room', 'room__room_type', 'assigned_to', 'assigned_staff')
+    if not is_housekeeper_only and not show_all:
+        tasks_qs = tasks_qs.filter(scheduled_date=selected_date)
+    # housekeeper-only sees all tasks for visibility; status updates limited below
+    tasks = list(tasks_qs.order_by('status', 'scheduled_date', 'room__number'))
+    pending = [t for t in tasks if t.status == 'PENDING']
+    in_progress = [t for t in tasks if t.status == 'IN_PROGRESS']
+    done = [t for t in tasks if t.status == 'DONE']
+    my_rooms = sorted({t.room.number for t in tasks if t.status != 'DONE'})
+
+    rooms = list(Room.objects.select_related('room_type').order_by('number'))
+    active_tasks = HousekeepingTask.objects.select_related('assigned_to', 'assigned_staff').filter(status__in=['PENDING', 'IN_PROGRESS']).order_by('scheduled_date', '-pk')
+    task_by_room = {}
+    for t in active_tasks:
+        task_by_room.setdefault(t.room_id, t)
+
+    # room occupancy for the selected day
+    occupied = {
+        r.room_id: r for r in Reservation.objects.select_related('customer').filter(
+            status__in=['CONFIRMED', 'CHECKED_IN'], check_in__lte=date, check_out__gt=date,
+        )
+    }
+    room_cards = []
+    for room in rooms:
+        current_task = task_by_room.get(room.pk)
+        reservation = occupied.get(room.pk)
+        can_update = False
+        if current_task:
+            can_update = can_manage or (is_housekeeper_only and (not current_task.assigned_to_id or current_task.assigned_to_id == request.user.pk))
+        room_cards.append({
+            'room': room, 'task': current_task, 'can_update': can_update,
+            'reservation': reservation,
+            'is_occupied': bool(reservation and reservation.status == 'CHECKED_IN'),
+            'is_reserved': bool(reservation and reservation.status == 'CONFIRMED'),
+        })
+
+    recent_names = list(
+        HousekeepingTask.objects.exclude(assigned_name='').order_by('-pk')
+        .values_list('assigned_name', flat=True)[:20]
+    )
+    seen = set(); assignee_names = []
+    for name in recent_names:
+        n = (name or '').strip()
+        if n and n.lower() not in seen:
+            seen.add(n.lower()); assignee_names.append(n)
+    from apps.core.models import HousekeepingStaff
+    staff_members = HousekeepingStaff.objects.filter(active=True).order_by('first_name', 'last_name')
+    for s in staff_members:
+        n = s.full_name
+        if n and n.lower() not in seen:
+            seen.add(n.lower()); assignee_names.append(n)
+
+    return {
+        'today': today,
+        'selected_date': selected_date,
+        'show_all': show_all,
+        'tasks': tasks,
+        'pending_tasks': pending,
+        'in_progress_tasks': in_progress,
+        'done_tasks': done,
+        'my_rooms': my_rooms,
+        'is_housekeeper': is_housekeeper_only,
+        'can_manage_housekeeping': can_manage,
+        'rooms': rooms,
+        'room_cards': room_cards,
+        'housekeepers': get_user_model().objects.filter(is_active=True).order_by('first_name', 'username'),
+        'staff_members': staff_members,
+        'assignee_names': assignee_names,
+        'task_types': HousekeepingTask.TASK,
+    }
+
+
+def _resolve_housekeeping_assignee(request):
+    from apps.core.models import HousekeepingStaff
+    assigned_to_id = request.POST.get('assigned_to') or ''
+    assigned_staff_id = request.POST.get('assigned_staff') or ''
+    assigned_name = (request.POST.get('assigned_name') or '').strip()
+    assignee = get_user_model().objects.filter(pk=assigned_to_id, is_active=True).first() if assigned_to_id else None
+    staff = HousekeepingStaff.objects.filter(pk=assigned_staff_id, active=True).first() if assigned_staff_id else None
+    if assignee:
+        return assignee, None, ''
+    if staff:
+        return None, staff, ''
+    return None, None, assigned_name
+
+
+@role_required('Receptionist', 'Owner', 'Housekeeper')
+def housekeeping_workspace(request):
+    context = _housekeeping_context(request)
+    if request.method == 'POST' and context['can_manage_housekeeping']:
+        room_id = request.POST.get('room')
+        task_type = request.POST.get('task_type') or 'CLEANING'
+        notes = (request.POST.get('notes') or '').strip()
+        scheduled_date = _parse_date(request.POST.get('scheduled_date'), context['today'])
+        room = Room.objects.filter(pk=room_id).first()
+        assignee, staff, assigned_name = _resolve_housekeeping_assignee(request)
+        if not room:
+            messages.error(request, 'Sélectionnez une chambre valide.')
+        elif task_type not in {c for c, _ in HousekeepingTask.TASK}:
+            messages.error(request, 'Type de tâche invalide.')
+        else:
+            task = HousekeepingTask.objects.create(
+                room=room, assigned_to=assignee, assigned_staff=staff, assigned_name=assigned_name,
+                task_type=task_type, status='PENDING', scheduled_date=scheduled_date, notes=notes,
+                updated_by=request.user,
+            )
+            log_action(request.user, 'Tâche housekeeping créée', task,
+                       details={'room': str(room), 'assigned_to': task.assignee_label, 'date': str(scheduled_date)})
+            messages.success(request, f'Tâche créée pour la chambre {room.number} ({scheduled_date:%d/%m/%Y}).')
+        return redirect(f"{reverse('workspaces:housekeeping')}?date={scheduled_date:%Y-%m-%d}")
+    return render(request, 'workspaces/housekeeping.html', context)
+
+
+@role_required('Receptionist', 'Owner', 'Housekeeper')
+def housekeeping_print(request):
+    context = _housekeeping_context(request, for_print=True)
+    return render(request, 'workspaces/housekeeping_print.html', context)
+
+
 @role_required('Receptionist', 'Owner')
-def housekeeping_status(request, pk):
+def housekeeping_assign(request, pk):
     task = get_object_or_404(HousekeepingTask, pk=pk)
     if request.method != 'POST':
         return redirect('workspaces:reception')
+    assignee, staff, assigned_name = _resolve_housekeeping_assignee(request)
+    task.assigned_to = assignee
+    task.assigned_staff = staff
+    task.assigned_name = '' if (assignee or staff) else assigned_name
+    task.updated_by = request.user
+    task.save(update_fields=['assigned_to', 'assigned_staff', 'assigned_name', 'updated_by'])
+    log_action(request.user, 'Tâche housekeeping assignée', task,
+               details={'room': str(task.room), 'assigned_to': task.assignee_label})
+    messages.success(request, 'Affectation mise à jour.')
+    return redirect(request.POST.get('next') or request.META.get('HTTP_REFERER') or reverse('workspaces:reception'))
+
+
+@role_required('Receptionist', 'Owner', 'Housekeeper')
+def housekeeping_status(request, pk):
+    task = get_object_or_404(HousekeepingTask, pk=pk)
+    dest = request.POST.get('next') or request.META.get('HTTP_REFERER') or reverse('workspaces:housekeeping')
+    if request.method != 'POST':
+        return redirect(dest)
     status = request.POST.get('status', '')
+    note = request.POST.get('notes')
     try:
-        update_housekeeping(task, status, request.user)
+        update_housekeeping(task, status, request.user, note=note)
     except ValueError as exc:
         messages.error(request, str(exc))
     else:
         messages.success(request, 'Tâche de ménage mise à jour.')
-    return redirect('workspaces:reception')
+    return redirect(dest)
+
+
+@role_required('Receptionist', 'Owner', 'Housekeeper')
+def housekeeping_note(request, pk):
+    task = get_object_or_404(HousekeepingTask, pk=pk)
+    dest = request.POST.get('next') or request.META.get('HTTP_REFERER') or reverse('workspaces:housekeeping')
+    if request.method != 'POST':
+        return redirect(dest)
+    task.notes = (request.POST.get('notes') or '').strip()
+    task.updated_by = request.user
+    task.save(update_fields=['notes', 'updated_by'])
+    log_action(request.user, 'Note housekeeping mise à jour', task, details={'room': str(task.room)})
+    messages.success(request, 'Note enregistrée.')
+    return redirect(dest)
+
+
+@role_required('Receptionist', 'Owner')
+def housekeeping_delete(request, pk):
+    task = get_object_or_404(HousekeepingTask, pk=pk)
+    dest = request.POST.get('next') or request.META.get('HTTP_REFERER') or reverse('workspaces:housekeeping')
+    if request.method != 'POST':
+        return redirect(dest)
+    log_action(request.user, 'Tâche housekeeping supprimée', task, details={'room': str(task.room), 'status': task.status})
+    task.delete()
+    messages.success(request, 'Tâche supprimée.')
+    return redirect(dest)
+
+
+@role_required('Receptionist', 'Owner')
+def housekeeping_bulk_assign(request):
+    if request.method != 'POST':
+        return redirect('workspaces:housekeeping')
+    date = _parse_date(request.POST.get('date'), timezone.localdate())
+    dest = request.POST.get('next') or request.META.get('HTTP_REFERER') or reverse('workspaces:housekeeping')
+    room_ids = request.POST.getlist('rooms')
+    task_type = request.POST.get('task_type') or 'CLEANING'
+    notes = (request.POST.get('notes') or '').strip()
+    assignee, staff, assigned_name = _resolve_housekeeping_assignee(request)
+    if task_type not in {c for c, _ in HousekeepingTask.TASK}:
+        messages.error(request, 'Type de tâche invalide.')
+        return redirect(dest)
+    rooms = Room.objects.filter(pk__in=room_ids)
+    created = 0
+    for room in rooms:
+        _, was_created = HousekeepingTask.objects.get_or_create(
+            room=room, task_type=task_type, scheduled_date=date, status__in=['PENDING', 'IN_PROGRESS'],
+            defaults={'assigned_to': assignee, 'assigned_staff': staff, 'assigned_name': '' if (assignee or staff) else assigned_name, 'notes': notes, 'updated_by': request.user, 'status': 'PENDING'},
+        )
+        if was_created:
+            created += 1
+    messages.success(request, f'{created} tâche(s) créée(s) pour le {date:%d/%m/%Y}.')
+    return redirect(dest)
+
+
+@role_required('Receptionist', 'Owner', 'Housekeeper')
+def housekeeping_staff_create(request):
+    from apps.core.models import HousekeepingStaff
+    dest = request.POST.get('next') or request.META.get('HTTP_REFERER') or reverse('workspaces:housekeeping')
+    if request.method != 'POST':
+        return redirect(dest)
+    first_name = (request.POST.get('first_name') or '').strip()
+    last_name = (request.POST.get('last_name') or '').strip()
+    phone = (request.POST.get('phone') or '').strip()
+    role_title = (request.POST.get('role_title') or 'Agent housekeeping').strip()
+    if not first_name:
+        messages.error(request, 'Le prénom de l’agent est requis.')
+        return redirect(dest)
+    staff = HousekeepingStaff.objects.create(
+        first_name=first_name, last_name=last_name, phone=phone, role_title=role_title,
+        created_by=request.user, updated_by=request.user,
+    )
+    log_action(request.user, 'Agent housekeeping créé', staff, details={'name': staff.full_name})
+    messages.success(request, f'Agent {staff.full_name} ajouté à l’équipe.')
+    return redirect(dest)
+
+
+@role_required('Receptionist', 'Owner', 'Housekeeper')
+def housekeeping_staff_toggle(request, pk):
+    from apps.core.models import HousekeepingStaff
+    staff = get_object_or_404(HousekeepingStaff, pk=pk)
+    dest = request.POST.get('next') or request.META.get('HTTP_REFERER') or reverse('workspaces:housekeeping')
+    if request.method != 'POST':
+        return redirect(dest)
+    staff.active = not staff.active
+    staff.updated_by = request.user
+    staff.save(update_fields=['active', 'updated_by'])
+    log_action(request.user, 'Agent housekeeping mis à jour', staff, details={'active': staff.active})
+    messages.success(request, f'Agent {staff.full_name} {"activé" if staff.active else "désactivé"}.')
+    return redirect(dest)
+
+
+@role_required('Receptionist', 'Owner', 'Housekeeper')
+def housekeeping_customer_create(request):
+    from apps.hotel.models import Customer
+    dest = request.POST.get('next') or request.META.get('HTTP_REFERER') or reverse('workspaces:housekeeping')
+    if request.method != 'POST':
+        return redirect(dest)
+    first_name = (request.POST.get('first_name') or '').strip()
+    last_name = (request.POST.get('last_name') or '').strip()
+    phone = (request.POST.get('phone') or '').strip()
+    email = (request.POST.get('email') or '').strip()
+    id_type = (request.POST.get('id_type') or 'OTHER').strip() or 'OTHER'
+    id_number = (request.POST.get('id_number') or f'HK-{timezone.now().strftime("%Y%m%d%H%M%S%f")}').strip()
+    if not first_name or not last_name:
+        messages.error(request, 'Prénom et nom du client sont requis.')
+        return redirect(dest)
+    if Customer.objects.filter(id_number=id_number).exists():
+        messages.error(request, 'Un client avec cette pièce d’identité existe déjà.')
+        return redirect(dest)
+    customer = Customer.objects.create(
+        first_name=first_name, last_name=last_name, phone=phone, email=email,
+        id_type=id_type, id_number=id_number,
+    )
+    log_action(request.user, 'Client créé (housekeeping)', customer, details={'name': str(customer)})
+    messages.success(request, f'Client {customer} créé.')
+    return redirect(dest)
 
 
 # ---------------------------------------------------------------------------
@@ -1182,7 +1470,7 @@ def bartender_workspace(request):
     return render(request, 'workspaces/bar.html', context)
 
 
-@role_required('Bartender', 'Waiter', 'Owner')
+@role_required('Bartender', 'Waiter', 'Receptionist', 'Owner')
 def bar_order_create(request, pk=None):
     return _compose_order(request, pk, bar=True)
 
@@ -1211,7 +1499,7 @@ def bar_order_action(request, pk, action):
     return redirect(dest)
 
 
-@role_required('Bartender', 'Waiter', 'Owner')
+@role_required('Bartender', 'Waiter', 'Receptionist', 'Owner')
 def bar_attach_customer(request, pk):
     order = get_object_or_404(BarOrder, pk=pk)
     next_ws = request.POST.get('next')
@@ -1231,7 +1519,7 @@ def bar_attach_customer(request, pk):
     return redirect(dest)
 
 
-@role_required('Bartender', 'Waiter', 'Owner')
+@role_required('Bartender', 'Waiter', 'Receptionist', 'Owner')
 def bar_request_bill(request, pk):
     order = get_object_or_404(BarOrder, pk=pk)
     next_ws = request.POST.get('next')
@@ -1354,7 +1642,7 @@ def reception_room_detail(request, pk):
     return render(request, 'workspaces/room_detail.html', context)
 
 
-@role_required('Bartender', 'Waiter', 'Owner')
+@role_required('Bartender', 'Waiter', 'Receptionist', 'Owner')
 def bar_table_detail(request, pk):
     table = get_object_or_404(BarTable, pk=pk)
     active_orders = list(
@@ -1444,7 +1732,7 @@ def service_charge_room(request, pk):
     return redirect('workspaces:service')
 
 
-@role_required('Bartender', 'Waiter', 'Owner')
+@role_required('Bartender', 'Waiter', 'Receptionist', 'Owner')
 def bar_charge_room(request, pk):
     order = get_object_or_404(BarOrder, pk=pk)
     next_ws = request.POST.get('next')
@@ -1469,7 +1757,7 @@ def _collect_fallback_url(request):
     ref = request.META.get('HTTP_REFERER')
     if ref:
         return ref
-    roles = set(user_roles(request.user))
+    roles = _groups(request.user)
     if request.user.is_superuser or 'Owner' in roles or 'Cashier' in roles:
         return reverse('workspaces:cashier')
     if 'Bartender' in roles:
@@ -1482,7 +1770,7 @@ def _collect_fallback_url(request):
 # Cashier — financial operations
 # ---------------------------------------------------------------------------
 
-@role_required('Cashier', 'Owner')
+@role_required('Cashier', 'Owner', 'Comptable')
 def cashier_workspace(request):
     today = timezone.localdate()
 
@@ -1557,6 +1845,7 @@ def payment_create(request, pk):
     if not invoice.is_payable:
         messages.error(request, 'Seule une facture émise ou partiellement payée peut être encaissée.')
         return redirect(_collect_fallback_url(request))
+    next_url = request.GET.get('next') or request.POST.get('next') or ''
     initial = {'amount': invoice.balance}
     default_method = PaymentMethod.objects.filter(active=True).order_by('name').first()
     if default_method:
@@ -1575,13 +1864,17 @@ def payment_create(request, pk):
             form.add_error(None, str(exc))
         else:
             messages.success(request, 'Paiement enregistré.')
-            return redirect('workspaces:payment_receipt', pk=payment.pk)
+            receipt_url = reverse('workspaces:payment_receipt', args=[payment.pk])
+            if next_url:
+                receipt_url = f'{receipt_url}?next={next_url}'
+            return redirect(receipt_url)
 
     return render(request, 'workspaces/payment_form.html', {
         'invoice': invoice,
         'form': form,
         'invoice_items': invoice.items.all(),
         'payment_methods': PaymentMethod.objects.filter(active=True).order_by('name'),
+        'next_url': next_url,
     })
 
 
@@ -1591,8 +1884,9 @@ def payment_receipt(request, pk):
         Payment.objects.select_related('invoice', 'invoice__customer', 'method', 'received_by'),
         pk=pk,
     )
-    back_url = _collect_fallback_url(request)
-    can_access_cashier = _has_role(request.user, {'Cashier', 'Owner'})
+    next_url = request.GET.get('next')
+    back_url = next_url or _collect_fallback_url(request)
+    can_access_cashier = _has_role(request.user, {'Cashier', 'Owner', 'Comptable'})
     return render(request, 'workspaces/receipt.html', {
         'payment': payment,
         'back_url': back_url,
@@ -1656,7 +1950,7 @@ def _invoice_segment(invoice):
     return 'other'
 
 
-@role_required('Superadmin', 'Owner')
+@role_required('Superadmin', 'Owner', 'Comptable', 'Cashier')
 def finance_balance(request):
     today = timezone.localdate()
     start = _parse_date(request.GET.get('date_from'), today.replace(day=1))

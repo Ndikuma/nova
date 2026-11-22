@@ -41,7 +41,7 @@
             <a class="button button-small button-light" href="{% url 'reports:invoice_print' current_invoice.pk %}" target="_blank" rel="noopener">Imprimer facture</a>
             <a class="button button-small button-light" href="{% url 'reports:invoice_pdf' current_invoice.pk %}">PDF</a>
             {% if current_invoice.balance > 0 and can_collect %}
-            <a class="button button-small" href="{% url 'workspaces:payment_create' current_invoice.pk %}">Encaisser</a>
+            <form method="post" action="{% url 'workspaces:reservation_collect' current_reservation.pk %}" style="margin:0">{% csrf_token %}<input type="hidden" name="next" value="{% url 'workspaces:reception_room_detail' room.pk %}"><button class="button button-small" type="submit">Encaisser</button></form>
             {% endif %}
             <a class="button button-small button-light" href="/module/hotel/reservation/{{ current_reservation.pk }}/">Dossier réservation</a>
         </div>
@@ -49,8 +49,11 @@
         <p class="muted" style="margin-top:8px">Aucune facture liée pour ce séjour.</p>
         <div class="desk-row-actions" style="margin-top:12px;flex-wrap:wrap">
             <a class="button button-small button-light" href="/module/hotel/reservation/{{ current_reservation.pk }}/">Dossier réservation</a>
-            {% if current_reservation.status == 'CHECKED_IN' %}
-            <form method="post" action="{% url 'workspaces:reservation_prepare_checkout' current_reservation.pk %}">{% csrf_token %}<button class="button button-small button-light" type="submit">Préparer facture</button></form>
+            {% if current_reservation.status in 'CONFIRMED,CHECKED_IN' %}
+            <form method="post" action="{% url 'workspaces:reservation_prepare_checkout' current_reservation.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{% url 'workspaces:reception_room_detail' room.pk %}"><button class="button button-small button-light" type="submit">Préparer facture</button></form>
+            {% if can_collect %}
+            <form method="post" action="{% url 'workspaces:reservation_collect' current_reservation.pk %}" style="margin:0">{% csrf_token %}<input type="hidden" name="next" value="{% url 'workspaces:reception_room_detail' room.pk %}"><button class="button button-small" type="submit">Encaisser</button></form>
+            {% endif %}
             {% endif %}
         </div>
         {% endif %}

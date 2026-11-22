@@ -9,6 +9,15 @@ class DrinkCategory(models.Model):
     description = models.TextField(blank=True)
     active = models.BooleanField(default=True)
 
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', editable=False,
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', editable=False,
+    )
+
     def __str__(self):
         return self.name
 
@@ -29,7 +38,25 @@ class Drink(models.Model):
     selling_price = models.DecimalField(max_digits=12, decimal_places=2)
     image = models.ImageField(upload_to='drinks/', blank=True, null=True)
     available = models.BooleanField(default=True)
-    recipe_id = models.IntegerField(null=True, blank=True)
+    recipe = models.ForeignKey(
+        'inventory.Recipe', null=True, blank=True, on_delete=models.SET_NULL,
+        verbose_name='Recette', related_name='drinks',
+        help_text='Recette/composition (ingrédients inventaire) utilisée pour cette boisson.',
+    )
+    stock_product = models.ForeignKey(
+        'inventory.Product', null=True, blank=True, on_delete=models.SET_NULL,
+        verbose_name='Produit inventaire lié', related_name='bar_drinks',
+        help_text='Produit stocké correspondant (ex. bouteille/canette). Utile pour le suivi stock/réapprovisionnement.',
+    )
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', editable=False,
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', editable=False,
+    )
 
     def __str__(self):
         return self.name
@@ -40,6 +67,15 @@ class BarTable(models.Model):
     capacity = models.PositiveIntegerField(default=2)
     status = models.CharField(max_length=20, default='AVAILABLE')
     active = models.BooleanField(default=True)
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', editable=False,
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', editable=False,
+    )
 
     def __str__(self):
         return self.name
@@ -62,6 +98,11 @@ class BarOrder(models.Model):
     notes = models.TextField(blank=True)
     total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', editable=False,
+    )
 
     def __str__(self):
         place = self.table or self.customer or 'Comptoir'

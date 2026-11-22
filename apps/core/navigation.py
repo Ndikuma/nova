@@ -110,7 +110,7 @@ FIELD_LABELS = {
     'completion_date': 'Date de fin', 'capacity': 'Capacité', 'section': 'Section',
     'menu': 'Menu', 'menu_item': 'Article', 'category': 'Catégorie',
     'selling_price': 'Prix de vente', 'image': 'Image', 'available': 'Disponible',
-    'recipe_id': 'Recette', 'source': 'Source', 'table': 'Table',
+    'recipe_id': 'Recette', 'recipe': 'Recette', 'source': 'Source', 'table': 'Table',
     'total_amount': 'Montant total', 'unit_price': 'Prix unitaire', 'quantity': 'Quantité',
     'reservation_at': 'Date de réservation', 'guests': 'Convives', 'drink': 'Boisson',
     'contact': 'Contact', 'email': 'E-mail', 'phone': 'Téléphone', 'address': 'Adresse',
@@ -118,7 +118,7 @@ FIELD_LABELS = {
     'supplier': 'Fournisseur', 'order_date': 'Date de commande',
     'expected_delivery': 'Livraison prévue', 'purchase_order': 'Bon de commande',
     'unit_cost': 'Coût unitaire', 'instructions': 'Instructions', 'unit': 'Unité',
-    'product': 'Produit', 'minimum_stock': 'Stock minimum', 'sku': 'Référence',
+    'product': 'Produit', 'stock_product': 'Produit inventaire lié', 'minimum_stock': 'Stock minimum', 'sku': 'Référence',
     'location': 'Emplacement', 'movement_type': 'Type de mouvement',
     'reference': 'Référence', 'date': 'Date', 'responsible_user': 'Responsable',
     'issued_at': 'Émise le', 'paid_amount': 'Montant payé', 'invoice': 'Facture',
@@ -140,18 +140,22 @@ FIELD_LABELS = {
 ROLE_MODULES = {
     'Superadmin': None,
     'Owner': None,
-    'Chef': ['restaurant', 'inventory', 'core'],
+    'Comptable': ['finance', 'inventory', 'restaurant', 'bar', 'core'],
+    'Chef': ['restaurant', 'bar', 'inventory', 'core'],
     'Receptionist': ['hotel', 'restaurant', 'core'],
+    'Housekeeper': ['hotel', 'core'],
     'Waiter': ['restaurant', 'bar', 'core'],
-    'Bartender': ['bar', 'core'],
-    'Cashier': ['finance', 'core'],
+    'Bartender': ['restaurant', 'bar', 'inventory', 'core'],
+    'Cashier': ['finance', 'inventory', 'core'],
 }
 
 ROLE_LABELS = {
     'Superadmin': 'Superadmin',
     'Owner': 'Gérant',
+    'Comptable': 'Comptable',
     'Chef': 'Chef de cuisine',
     'Receptionist': 'Réceptionniste',
+    'Housekeeper': 'Housekeeping',
     'Waiter': 'Serveur',
     'Cashier': 'Caissier',
     'Bartender': 'Barman',
@@ -245,22 +249,32 @@ def build_nav(user=None):
     """Return the sidebar sections consumed by ``templates/base.html``."""
     allowed = set(accessible_modules(user))
     sections = []
+    roles = set(user_roles(user)) if user and getattr(user, 'is_authenticated', False) else set()
     for module, cfg in MODULES.items():
         if module not in allowed:
             continue
+        model_names = list(cfg['models'])
+        if module == 'hotel' and 'Housekeeper' in roles and not (getattr(user, 'is_superuser', False) or bool({'Owner','Receptionist'} & roles)):
+            model_names = ['Room', 'HousekeepingTask']
         items = [
             {
                 'label': model_label(name),
                 'url': f'/module/{module}/{entity_slug(name)}/',
                 'icon': model_icon(name),
             }
-            for name in cfg['models']
+            for name in model_names
         ]
+        section_label = cfg['title']
+        section_icon = cfg['icon']
+        section_url = f'/module/{module}/'
+        if module == 'hotel' and 'Housekeeper' in roles and not (getattr(user, 'is_superuser', False) or bool({'Owner','Receptionist'} & roles)):
+            section_label = 'Chambres & ménage'
+            section_icon = 'cleaning'
         sections.append({
             'key': module,
-            'label': cfg['title'],
-            'icon': cfg['icon'],
-            'url': f'/module/{module}/',
+            'label': section_label,
+            'icon': section_icon,
+            'url': section_url,
             'items': items,
         })
     return sections
@@ -317,6 +331,13 @@ WORKSPACE_ENTRIES = {
         'url': '/workspace/service/',
         'icon': 'table',
     },
+    'Housekeeper': {
+        'key': 'housekeeping',
+        'label': 'Housekeeping',
+        'description': 'Chambres, ménage, équipe terrain et signalements.',
+        'url': '/workspace/housekeeping/',
+        'icon': 'cleaning',
+    },
     'Cashier': {
         'key': 'cashier',
         'label': 'Caisse',
@@ -333,7 +354,7 @@ WORKSPACE_ENTRIES = {
     },
 }
 
-_WORKSPACE_PRIORITY = ('Superadmin', 'Owner', 'Chef', 'Receptionist', 'Waiter', 'Cashier', 'Bartender')
+_WORKSPACE_PRIORITY = ('Superadmin', 'Owner', 'Comptable', 'Chef', 'Receptionist', 'Housekeeper', 'Waiter', 'Cashier', 'Bartender')
 
 
 def primary_workspace(user=None):

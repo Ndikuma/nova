@@ -51,6 +51,7 @@
         </div>
         <form method="post" class="stack-form">
             {% csrf_token %}
+            {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
             {% if form.non_field_errors %}<div class="alert" role="alert">{{ form.non_field_errors|striptags }}</div>{% endif %}
             {% for field in form %}
             <label class="{% if field.errors %}has-error{% endif %}">

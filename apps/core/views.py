@@ -6,6 +6,7 @@ from decimal import Decimal
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.forms import SetPasswordForm
 from django.contrib.auth.models import Group
 from django.core.exceptions import PermissionDenied
 from django.db import models
@@ -24,7 +25,7 @@ from apps.inventory.models import (Product, PurchaseOrder, PurchaseOrderItem, Re
                                     RecipeIngredient, Stock, StockMovement, Supplier)
 from apps.inventory.services import move_stock
 from apps.restaurant.models import Menu, MenuItem, Order, OrderItem, RestaurantReservation, Table
-from apps.workspaces.services import active_stay_reservation_for_customer, find_bar_invoice, find_order_invoice, find_reservation_invoice, register_payment
+from apps.workspaces.services import active_stay_reservation_for_customer, find_bar_invoice, find_order_invoice, find_reservation_invoice, log_action, register_payment
 from apps.workspaces.views import workspace_home as _workspace_home
 from apps.core.models import AuditLog, Customer
 
@@ -35,7 +36,7 @@ from .public_views import public_home
 # Fields that should never be shown in the generic list/detail screens.
 HIDDEN_FIELDS = {'password', 'last_login', 'date_joined', 'user_permissions', 'groups', 'is_walk_in'}
 # User references that the console fills in automatically.
-AUDIT_USER_FIELDS = ('created_by', 'responsible_user', 'received_by', 'opening_user', 'closing_user')
+AUDIT_USER_FIELDS = ('created_by', 'updated_by', 'responsible_user', 'received_by', 'opening_user', 'closing_user')
 # Technical fields left out of the auto-generated forms for some models.
 FORM_EXCLUDES = {
     'User': ('id', 'password', 'last_login', 'date_joined', 'groups', 'user_permissions',
@@ -45,11 +46,18 @@ FORM_EXCLUDES = {
 }
 
 
-def _ensure_module_access(request, module):
+HOUSEKEEPER_HOTEL_MODELS = {'room', 'housekeepingtask'}
+
+def _ensure_module_access(request, module, entity=None):
     if module not in MODULES:
         raise Http404('Module introuvable')
     if not user_can_access_module(request.user, module):
         raise PermissionDenied('Vous n’avez pas accès à ce module.')
+    if entity and module == 'hotel':
+        roles = set(user_roles(request.user))
+        if 'Housekeeper' in roles and not (request.user.is_superuser or bool({'Owner','Receptionist'} & roles)):
+            if entity.lower() not in HOUSEKEEPER_HOTEL_MODELS:
+                raise PermissionDenied('Accès limité aux chambres et tâches housekeeping.')
 
 
 def model_for(module, entity):
@@ -109,12 +117,7 @@ def _record_cells(obj, fields):
 
 
 def _formfield_callback(field):
-    if field.name == 'recipe_id' and field.model in (MenuItem, Drink):
-        return forms.TypedChoiceField(
-            label='Recette', required=False, coerce=int, empty_value=None,
-            choices=[('', 'Aucune recette'), *Recipe.objects.order_by('name', 'pk').values_list('pk', 'name')],
-            widget=forms.Select(attrs={'class': 'select-input'}),
-        )
+
     formfield = field.formfield()
     if formfield is None:
         return None
@@ -802,6 +805,10 @@ def module_home(request, module):
         raise Http404('Module introuvable')
     if not user_can_access_module(request.user, module):
         raise PermissionDenied('Vous n’avez pas accès à ce module.')
+    roles = set(user_roles(request.user))
+    is_hk_only = module == 'hotel' and 'Housekeeper' in roles and not (request.user.is_superuser or bool({'Owner','Receptionist'} & roles))
+    if is_hk_only:
+        return redirect('workspaces:housekeeping')
     cfg = MODULES[module]
     counts = {}
     for name in cfg['models']:
@@ -872,7 +879,13 @@ def _is_posted_record(obj):
     return type(obj) in POSTED_RECORDS
 
 
-def _save_generic_record(form, user):
+def _track_record_fields(obj):
+    for name in ('created_by', 'updated_by', 'responsible_user', 'received_by', 'opening_user'):
+        if hasattr(obj, f'{name}_id'):
+            yield name
+
+
+def _save_generic_record(form, user, previous=None):
     obj = form.save(commit=False)
     if isinstance(obj, Payment):
         return register_payment(obj.invoice, obj.amount, obj.method, user, reference=obj.reference)
@@ -881,17 +894,40 @@ def _save_generic_record(form, user):
             product=obj.product, location=obj.location, quantity=obj.quantity,
             movement_type=obj.movement_type, user=user, reference=obj.reference,
         )
-    for name in ('created_by', 'responsible_user', 'received_by', 'opening_user'):
+
+    is_create = previous is None
+    if hasattr(obj, 'created_by_id') and obj.created_by_id is None:
+        obj.created_by = user
+    if hasattr(obj, 'updated_by_id'):
+        obj.updated_by = user
+    for name in ('responsible_user', 'received_by', 'opening_user'):
         if hasattr(obj, f'{name}_id') and getattr(obj, f'{name}_id') is None:
             setattr(obj, name, user)
     obj.save()
     form.save_m2m()
+
+    details = {'by': str(user)}
+    if previous is not None:
+        changed = []
+        for field in form.changed_data:
+            before = previous.get(field)
+            after = getattr(obj, field, None)
+            if hasattr(after, 'pk'):
+                after = str(after)
+            changed.append({'field': field, 'before': str(before) if before is not None else '', 'after': str(after) if after is not None else ''})
+        details['changed'] = changed
+    log_action(
+        user,
+        f"{'Création' if is_create else 'Modification'} {model_label(obj.__class__.__name__)}",
+        obj,
+        details=details,
+    )
     return obj
 
 
 @login_required
 def entity_list(request, module, entity):
-    _ensure_module_access(request, module)
+    _ensure_module_access(request, module, entity)
     legacy = _order_line_redirect(module, entity)
     if legacy:
         return legacy
@@ -946,7 +982,7 @@ def entity_list(request, module, entity):
 
 @login_required
 def entity_detail(request, module, entity, pk):
-    _ensure_module_access(request, module)
+    _ensure_module_access(request, module, entity)
     legacy = _order_line_redirect(module, entity, pk)
     if legacy:
         return legacy
@@ -956,7 +992,7 @@ def entity_detail(request, module, entity, pk):
         bar = model is BarOrder
         invoice = find_bar_invoice(obj) if bar else find_order_invoice(obj)
         roles = set(user_roles(request.user))
-        can_collect = request.user.is_superuser or bool({'Cashier', 'Owner', 'Receptionist', 'Waiter', 'Bartender', 'Chef'} & roles)
+        can_collect = request.user.is_superuser or bool({'Cashier', 'Owner', 'Receptionist', 'Waiter', 'Bartender', 'Chef', 'Comptable'} & roles)
         stay_reservation = None
         if not invoice and obj.status == 'SERVED' and obj.customer_id:
             stay_reservation = active_stay_reservation_for_customer(obj.customer)
@@ -979,7 +1015,7 @@ def entity_detail(request, module, entity, pk):
     source_booking_requests = None
     if isinstance(obj, Invoice):
         can_collect_payment = obj.is_payable and (
-            request.user.is_superuser or bool({'Cashier', 'Owner', 'Receptionist', 'Waiter', 'Bartender', 'Chef'} & set(user_roles(request.user)))
+            request.user.is_superuser or bool({'Cashier', 'Owner', 'Receptionist', 'Waiter', 'Bartender', 'Chef', 'Comptable'} & set(user_roles(request.user)))
         )
         related_payments = obj.payments.select_related('method', 'received_by').order_by('-paid_at')
         invoice_source = (obj.notes or '').splitlines()[0] if obj.notes else ''
@@ -1040,6 +1076,9 @@ def entity_detail(request, module, entity, pk):
         reservation_actions = _reservation_actions(request, obj)
     if isinstance(obj, Payment):
         related_invoice = obj.invoice
+    created_by = getattr(obj, 'created_by', None)
+    updated_by = getattr(obj, 'updated_by', None)
+    can_reset_password = isinstance(obj, get_user_model()) and (request.user.is_superuser or bool({'Owner'} & set(user_roles(request.user))))
     return render(request, 'entity_detail.html', {
         'module': module,
         'config': MODULES[module],
@@ -1060,6 +1099,9 @@ def entity_detail(request, module, entity, pk):
         'booking_actions': booking_actions,
         'source_booking_requests': source_booking_requests,
         'reservation_actions': locals().get('reservation_actions'),
+        'created_by': created_by,
+        'updated_by': updated_by,
+        'can_reset_password': can_reset_password,
         'modules': MODULES,
     })
 
@@ -1067,7 +1109,7 @@ def entity_detail(request, module, entity, pk):
 def _reservation_actions(request, reservation):
     roles = set(user_roles(request.user))
     can_manage = request.user.is_superuser or bool({'Receptionist', 'Owner'} & roles)
-    can_collect = request.user.is_superuser or bool({'Cashier', 'Owner', 'Receptionist', 'Waiter', 'Bartender', 'Chef'} & roles)
+    can_collect = request.user.is_superuser or bool({'Cashier', 'Owner', 'Receptionist', 'Waiter', 'Bartender', 'Chef', 'Comptable'} & roles)
     invoice = find_reservation_invoice(reservation)
     stay = Stay.objects.filter(reservation=reservation).order_by('-actual_check_in', '-pk').first()
     has_unpaid = bool(invoice and invoice.balance > 0)
@@ -1078,8 +1120,8 @@ def _reservation_actions(request, reservation):
         'stay': stay,
         'editable': reservation.status in ('DRAFT', 'CONFIRMED'),
         'can_check_in': reservation.status == 'CONFIRMED',
-        'can_prepare_checkout': reservation.status == 'CHECKED_IN' and (invoice is None or has_unpaid),
-        'can_collect_payment': reservation.status == 'CHECKED_IN' and has_unpaid and can_collect,
+        'can_prepare_checkout': reservation.status in ('CONFIRMED', 'CHECKED_IN'),
+        'can_collect_payment': reservation.status in ('CONFIRMED', 'CHECKED_IN') and can_collect,
         'can_check_out': reservation.status == 'CHECKED_IN' and invoice is not None and not has_unpaid,
         'can_cancel': reservation.status in ('DRAFT', 'CONFIRMED'),
     }
@@ -1087,7 +1129,7 @@ def _reservation_actions(request, reservation):
 
 @login_required
 def entity_create(request, module, entity):
-    _ensure_module_access(request, module)
+    _ensure_module_access(request, module, entity)
     legacy = _order_line_redirect(module, entity)
     if legacy:
         return legacy
@@ -1124,7 +1166,7 @@ def entity_create(request, module, entity):
         except ValueError as exc:
             form.add_error(None, str(exc))
         else:
-            messages.success(request, f'{label(entity)} créé avec succès.')
+            messages.success(request, f'{model_label(model.__name__)} créé avec succès.')
             return redirect('entity_detail', module=module, entity=entity, pk=obj.pk)
     return render(request, 'entity_form.html', {
         'module': module,
@@ -1140,7 +1182,7 @@ def entity_create(request, module, entity):
 
 @login_required
 def entity_edit(request, module, entity, pk):
-    _ensure_module_access(request, module)
+    _ensure_module_access(request, module, entity)
     legacy = _order_line_redirect(module, entity, pk)
     if legacy:
         return legacy
@@ -1154,11 +1196,16 @@ def entity_edit(request, module, entity, pk):
         return redirect('entity_detail', module, entity, pk)
     Form = build_form(model)
     if request.method == 'POST':
+        previous = {f.name: getattr(obj, f.name) for f in obj._meta.fields}
         form = Form(request.POST, request.FILES, instance=obj)
         if form.is_valid():
-            form.save()
-            messages.success(request, f'{label(entity)} mis à jour.')
-            return redirect('entity_detail', module=module, entity=entity, pk=obj.pk)
+            try:
+                _save_generic_record(form, request.user, previous=previous)
+            except ValueError as exc:
+                form.add_error(None, str(exc))
+            else:
+                messages.success(request, f'{model_label(model.__name__)} mis à jour.')
+                return redirect('entity_detail', module=module, entity=entity, pk=obj.pk)
     else:
         form = Form(instance=obj)
     return render(request, 'entity_form.html', {
@@ -1174,7 +1221,7 @@ def entity_edit(request, module, entity, pk):
 
 @login_required
 def entity_delete(request, module, entity, pk):
-    _ensure_module_access(request, module)
+    _ensure_module_access(request, module, entity)
     legacy = _order_line_redirect(module, entity, pk)
     if legacy:
         return legacy
@@ -1186,8 +1233,10 @@ def entity_delete(request, module, entity, pk):
         return redirect('entity_detail', module, entity, pk)
     if request.method == 'POST':
         try:
+            log_action(request.user, f'Suppression {model_label(model.__name__)}', obj,
+                       details={'by': str(request.user), 'object': str(obj)})
             obj.delete()
-            messages.success(request, f'{label(entity)} supprimé.')
+            messages.success(request, f'{model_label(model.__name__)} supprimé.')
             return redirect('entity_list', module=module, entity=entity)
         except Exception as exc:  # protected records
             messages.error(request, f'Impossible de supprimer cet élément : {exc}')
@@ -1197,6 +1246,34 @@ def entity_delete(request, module, entity, pk):
         'entity': entity,
         'label': model_label(model.__name__),
         'object': obj,
+        'modules': MODULES,
+    })
+
+
+@login_required
+def entity_reset_password(request, module, entity, pk):
+    _ensure_module_access(request, module, entity)
+    model = model_for(module, entity)
+    User = get_user_model()
+    if model is not User:
+        raise Http404
+    if not (request.user.is_superuser or bool({'Owner'} & set(user_roles(request.user)))):
+        raise PermissionDenied('Seul un administrateur ou gérant peut réinitialiser un mot de passe.')
+    target = get_object_or_404(User, pk=pk)
+    form = SetPasswordForm(target, request.POST or None)
+    if request.method == 'POST' and form.is_valid():
+        form.save()
+        log_action(request.user, 'Réinitialisation mot de passe', target,
+                   details={'target': str(target), 'by': str(request.user)})
+        messages.success(request, f'Mot de passe réinitialisé pour {target}.')
+        return redirect('entity_detail', module=module, entity=entity, pk=target.pk)
+    return render(request, 'entity_password_reset.html', {
+        'module': module,
+        'config': MODULES[module],
+        'entity': entity,
+        'label': model_label(model.__name__),
+        'object': target,
+        'form': form,
         'modules': MODULES,
     })
 

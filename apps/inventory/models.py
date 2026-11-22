@@ -6,6 +6,15 @@ class UnitOfMeasure(models.Model):
     name = models.CharField(max_length=60, unique=True)
     symbol = models.CharField(max_length=12, blank=True)
 
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', editable=False,
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', editable=False,
+    )
+
     def __str__(self):
         return f'{self.name} ({self.symbol})' if self.symbol else self.name
 
@@ -13,6 +22,15 @@ class UnitOfMeasure(models.Model):
 class ProductCategory(models.Model):
     name = models.CharField(max_length=100, unique=True)
     active = models.BooleanField(default=True)
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', editable=False,
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', editable=False,
+    )
 
     def __str__(self):
         return self.name
@@ -27,6 +45,15 @@ class Product(models.Model):
     minimum_stock = models.DecimalField(max_digits=12, decimal_places=3, default=0)
     active = models.BooleanField(default=True)
 
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', editable=False,
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', editable=False,
+    )
+
     def __str__(self):
         return f'{self.name} · {self.sku}'
 
@@ -34,6 +61,15 @@ class Product(models.Model):
 class StockLocation(models.Model):
     name = models.CharField(max_length=100, unique=True)
     active = models.BooleanField(default=True)
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', editable=False,
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', editable=False,
+    )
 
     def __str__(self):
         return self.name
@@ -72,6 +108,11 @@ class StockMovement(models.Model):
     date = models.DateTimeField(auto_now_add=True)
     responsible_user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
 
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', editable=False,
+    )
+
     def __str__(self):
         return (
             f'{self.get_movement_type_display()} · {self.product} · '
@@ -87,6 +128,15 @@ class Supplier(models.Model):
     address = models.TextField(blank=True)
     tax_information = models.CharField(max_length=120, blank=True)
 
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', editable=False,
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', editable=False,
+    )
+
     def __str__(self):
         return self.name
 
@@ -97,6 +147,15 @@ class PurchaseOrder(models.Model):
     expected_delivery = models.DateField(null=True, blank=True)
     status = models.CharField(max_length=20, default='DRAFT')
     total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', editable=False,
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', editable=False,
+    )
 
     def __str__(self):
         ordered = self.order_date.strftime('%d/%m/%Y') if self.order_date else 'date à définir'
@@ -117,6 +176,15 @@ class Recipe(models.Model):
     name = models.CharField(max_length=120)
     instructions = models.TextField(blank=True)
     active = models.BooleanField(default=True)
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', editable=False,
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', editable=False,
+    )
 
     def __str__(self):
         return self.name

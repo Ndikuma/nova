@@ -16,6 +16,8 @@ from apps.core.models import AuditLog, Customer
 from apps.finance.models import Invoice, InvoiceItem
 from apps.finance.services import record_payment
 from apps.hotel.models import HousekeepingTask, Reservation, Stay
+from apps.inventory.models import Stock, StockLocation
+from apps.inventory.services import move_stock
 from apps.restaurant.models import Order, Table
 
 
@@ -325,14 +327,22 @@ def complete_checkout(reservation, user):
     return reservation
 
 
-def update_housekeeping(task, status, user):
+def update_housekeeping(task, status, user, *, note=None):
     allowed = {code for code, _label in HousekeepingTask.STATUS}
     if status not in allowed:
         raise ValueError('Statut de tâche invalide.')
     task.status = status
+    update_fields = ['status']
     if status == 'DONE':
         task.completion_date = timezone.localdate()
-    task.save(update_fields=['status', 'completion_date'])
+        update_fields.append('completion_date')
+    elif status in ('PENDING', 'IN_PROGRESS'):
+        task.completion_date = None
+        update_fields.append('completion_date')
+    if note is not None:
+        task.notes = note.strip()
+        update_fields.append('notes')
+    task.save(update_fields=update_fields)
     log_action(
         user, 'Mise à jour housekeeping', task,
         details={'room': str(task.room), 'status': status},
@@ -369,6 +379,45 @@ def restaurant_transition(order, action, user):
     return order
 
 
+def _default_bar_stock_location():
+    loc = StockLocation.objects.filter(active=True, name__icontains='bar').order_by('pk').first()
+    if loc:
+        return loc
+    loc = StockLocation.objects.filter(active=True).order_by('pk').first()
+    if loc:
+        return loc
+    return StockLocation.objects.create(name='Bar', active=True)
+
+
+@transaction.atomic
+def consume_bar_order_stock(order, user):
+    """Deduct linked inventory stock for bar drinks when served. Idempotent by reference."""
+    ref = f'BAR-SALE-{order.pk}'
+    if StockMovement.objects.filter(reference=ref).exists():
+        return []
+    location = _default_bar_stock_location()
+    movements = []
+    for item in order.items.select_related('drink__stock_product'):
+        product = getattr(item.drink, 'stock_product', None)
+        if not product:
+            continue
+        stock, _ = Stock.objects.select_for_update().get_or_create(product=product, location=location)
+        # If not enough stock, record as much as possible? better block? We'll consume up to available and warn via log.
+        qty = Decimal(item.quantity)
+        consume_qty = min(qty, stock.quantity) if stock.quantity > 0 else ZERO
+        if consume_qty <= ZERO:
+            log_action(user, 'Stock bar insuffisant à la vente', order,
+                       details={'product': str(product), 'needed': str(qty), 'available': str(stock.quantity), 'ref': ref})
+            continue
+        mv = move_stock(product=product, location=location, quantity=consume_qty,
+                        movement_type='SALE', user=user, reference=ref)
+        movements.append(mv)
+        if consume_qty < qty:
+            log_action(user, 'Stock bar partiellement consommé', order,
+                       details={'product': str(product), 'needed': str(qty), 'consumed': str(consume_qty), 'ref': ref})
+    return movements
+
+
 def bar_transition(order, action, user):
     transitions = {
         'start': (('OPEN', 'CONFIRMED'), 'PREPARING', 'Commande bar en préparation'),
@@ -382,6 +431,11 @@ def bar_transition(order, action, user):
         raise ValueError('Cette transition n’est pas autorisée pour le statut actuel.')
     order.status = to_status
     order.save(update_fields=['status'])
+    if to_status == 'SERVED':
+        try:
+            consume_bar_order_stock(order, user)
+        except Exception as exc:
+            log_action(user, 'Erreur consommation stock bar', order, details={'error': str(exc)})
     if to_status == 'CANCELLED':
         _release_bar_table(order)
     log_action(

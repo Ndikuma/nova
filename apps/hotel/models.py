@@ -12,6 +12,15 @@ class RoomType(models.Model):
     amenities = models.JSONField(default=list, blank=True)
     active = models.BooleanField(default=True)
 
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', editable=False,
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', editable=False,
+    )
+
     def __str__(self):
         return self.name
 
@@ -29,6 +38,15 @@ class Room(models.Model):
     operational_status = models.CharField(max_length=20, choices=STATUS, default='AVAILABLE')
     description = models.TextField(blank=True)
 
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', editable=False,
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', editable=False,
+    )
+
     def __str__(self):
         return f'Chambre {self.number} · {self.room_type}'
 
@@ -39,6 +57,15 @@ class RoomRate(models.Model):
     start_date = models.DateField()
     end_date = models.DateField(null=True, blank=True)
     active = models.BooleanField(default=True)
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', editable=False,
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', editable=False,
+    )
 
     def __str__(self):
         start = self.start_date.strftime('%d/%m/%Y') if self.start_date else 'date à définir'
@@ -85,6 +112,11 @@ class Reservation(models.Model):
             ).exists()
         ):
             raise ValidationError('Cette chambre est déjà réservée sur cette période.')
+
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', editable=False,
+    )
 
     def __str__(self):
         check_in = self.check_in.strftime('%d/%m/%Y') if self.check_in else '?'
@@ -137,6 +169,11 @@ class BookingRequest(models.Model):
             ),
         ]
 
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', editable=False,
+    )
+
     def __str__(self):
         return f'Demande web #{self.pk} · {self.room_type}'
 
@@ -153,6 +190,11 @@ class Stay(models.Model):
     @property
     def room(self):
         return self.reservation.room
+
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', editable=False,
+    )
 
     def __str__(self):
         reservation = self.reservation
@@ -174,12 +216,34 @@ class HousekeepingTask(models.Model):
     room = models.ForeignKey(Room, on_delete=models.PROTECT)
     assigned_to = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        help_text='Utilisateur système (optionnel).',
+    )
+    assigned_name = models.CharField(
+        'Agent assigné', max_length=120, blank=True,
+        help_text="Nom de l'agent de ménage si celui-ci n'a pas de compte système.",
+    )
+    assigned_staff = models.ForeignKey(
+        'core.HousekeepingStaff', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='tasks', verbose_name='Agent équipe',
     )
     task_type = models.CharField(max_length=20, choices=TASK)
     status = models.CharField(max_length=20, choices=STATUS, default='PENDING')
     scheduled_date = models.DateField()
     completion_date = models.DateField(null=True, blank=True)
     notes = models.TextField(blank=True)
+
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='+', editable=False,
+    )
+
+    @property
+    def assignee_label(self):
+        if self.assigned_to:
+            return self.assigned_to.get_full_name() or self.assigned_to.username
+        if self.assigned_staff_id:
+            return self.assigned_staff.full_name
+        return self.assigned_name or 'Non assignée'
 
     def __str__(self):
         scheduled = (

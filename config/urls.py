@@ -8,7 +8,7 @@ from apps.core.forms import StaffLoginForm
 from apps.core.public_views import public_about, public_bar, public_home, public_menu, public_room
 from apps.core.views import (
     dashboard, entity_create, entity_delete, entity_detail, entity_edit,
-    entity_list, module_home, search,
+    entity_list, entity_reset_password, module_home, search,
 )
 
 urlpatterns = [
@@ -35,6 +35,7 @@ urlpatterns = [
     path('module/<slug:module>/<slug:entity>/<int:pk>/', entity_detail, name='entity_detail'),
     path('module/<slug:module>/<slug:entity>/<int:pk>/edit/', entity_edit, name='entity_edit'),
     path('module/<slug:module>/<slug:entity>/<int:pk>/delete/', entity_delete, name='entity_delete'),
+    path('module/<slug:module>/<slug:entity>/<int:pk>/reset-password/', entity_reset_password, name='entity_reset_password'),
 ]
 
 # Serve storefront uploads with Django's development server.
