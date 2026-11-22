@@ -50,11 +50,23 @@ Modifiez ces comptes/mots de passe avant toute utilisation réelle.
 
 ## Commandes utiles
 
+Avec le venv du projet (`venv/`) :
+
 ```bash
-python3 manage.py check
-python3 manage.py test
-python3 manage.py migrate
-python3 manage.py seed_demo
+venv/bin/python manage.py check
+venv/bin/python manage.py test
+venv/bin/python manage.py migrate
+venv/bin/python manage.py seed_demo
+```
+
+Ou via `Makefile` (utilise `venv/bin/python` par défaut) :
+
+```bash
+make check
+make test            # ARGS="apps.reports" pour cibler
+make test-core       # rapports, workspaces, finance, core, hotel
+make migrate
+make run
 ```
 
 ### Réinitialisation (base vierge)

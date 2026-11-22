@@ -39,6 +39,7 @@ urlpatterns = [
     path('service/orders/<int:pk>/attach-customer/', views.service_attach_customer,
          name='service_attach_customer'),
     path('service/orders/<int:pk>/bill/', views.service_request_bill, name='service_request_bill'),
+    path('service/orders/<int:pk>/charge-room/', views.service_charge_room, name='service_charge_room'),
 
     path('bar/', views.bartender_workspace, name='bar'),
     path('bar/tables/<int:pk>/', views.bar_table_detail, name='bar_table_detail'),
@@ -49,6 +50,7 @@ urlpatterns = [
     path('bar/orders/<int:pk>/attach-customer/', views.bar_attach_customer,
          name='bar_attach_customer'),
     path('bar/orders/<int:pk>/bill/', views.bar_request_bill, name='bar_request_bill'),
+    path('bar/orders/<int:pk>/charge-room/', views.bar_charge_room, name='bar_charge_room'),
     path('bar/restock/', views.bar_restock, name='bar_restock'),
 
     path('cashier/', views.cashier_workspace, name='cashier'),

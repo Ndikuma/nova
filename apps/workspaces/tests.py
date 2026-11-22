@@ -193,12 +193,20 @@ class RestaurantFlowTests(TestCase):
         detail = reverse('entity_detail', args=['restaurant', 'order', order.pk])
         self.assertContains(self.client.get(detail), 'Salade')
         self.assertRedirects(self.client.get(reverse('entity_edit', args=['restaurant', 'orderitem', order.items.first().pk])), detail)
+        # facturation seulement après service (cuisine puis service)
+        chef = role_user('chef-rec', 'Chef')
+        self.client.force_login(chef)
+        self.client.post(reverse('workspaces:service_order_action', args=[order.pk, 'start']))
+        self.client.post(reverse('workspaces:service_order_action', args=[order.pk, 'ready']))
+        self.client.force_login(receptionist)
+        self.client.post(reverse('workspaces:service_order_action', args=[order.pk, 'serve']))
         self.assertRedirects(self.client.post(reverse('workspaces:service_request_bill', args=[order.pk])), reverse('workspaces:service'))
         self.assertEqual(Invoice.objects.get().items.count(), 2)
 
     def test_waiter_can_take_bar_orders_and_cashier_can_collect_for_walk_ins(self):
         category = DrinkCategory.objects.create(name='Jus')
         drink = Drink.objects.create(category=category, name='Bissap', selling_price=3000)
+        bartender = role_user('barman', 'Bartender')
         self.client.force_login(self.waiter)
         old_url = reverse('entity_create', args=['bar', 'barorder'])
         create_url = reverse('workspaces:bar_order_create')
@@ -211,13 +219,19 @@ class RestaurantFlowTests(TestCase):
         order.refresh_from_db()
         self.assertEqual(order.status, 'CONFIRMED')
         self.assertEqual(order.items.get().quantity, 2)
+        # préparation/service par le bar avant facturation
+        self.client.force_login(bartender)
+        self.client.post(reverse('workspaces:bar_order_action', args=[order.pk, 'start']))
+        self.client.post(reverse('workspaces:bar_order_action', args=[order.pk, 'serve']))
+        self.client.force_login(self.waiter)
         bill_url = reverse('workspaces:bar_request_bill', args=[order.pk])
         for _ in range(2):
             self.assertRedirects(self.client.post(bill_url), reverse('workspaces:bar'))
         invoice = Invoice.objects.get()
         self.assertTrue(invoice.customer.is_walk_in)
         self.assertEqual(invoice.total_amount, Decimal('6000'))
-        self.assertEqual(self.client.get(reverse('workspaces:payment_create', args=[invoice.pk])).status_code, 403)
+        # le personnel de service peut aussi encaisser en cas d'urgence
+        self.assertEqual(self.client.get(reverse('workspaces:payment_create', args=[invoice.pk])).status_code, 200)
 
         self.client.force_login(self.cashier)
         response = self.client.post(reverse('workspaces:payment_create', args=[invoice.pk]), {

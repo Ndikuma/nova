@@ -3,7 +3,6 @@
 {% block toolbar_title %}Reçu de paiement #{{ payment.pk }}{% endblock %}
 {% block toolbar_actions %}
 <a class="btn" href="{% url 'reports:receipt_pdf' payment.pk %}">Télécharger le PDF</a>
-<a class="btn" href="{% url 'reports:receipt_print' payment.pk %}?ticket=1">Ticket POS</a>
 {% endblock %}
 {% block document_footer %}{{ brand.receipt_footer }}{% endblock %}
 {% block doc_meta %}

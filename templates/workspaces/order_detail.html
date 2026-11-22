@@ -9,25 +9,26 @@
     </div>
     <div class="page-actions">
         <span class="{{ order.status|badge_class }}">{{ order.get_status_display }}</span>
-        {% if bar_order %}
-            {% url 'reports:order_print' 'bar' order.pk as order_print_url %}
-            {% url 'reports:order_pdf' 'bar' order.pk as order_pdf_url %}
-        {% else %}
-            {% url 'reports:order_print' 'restaurant' order.pk as order_print_url %}
-            {% url 'reports:order_pdf' 'restaurant' order.pk as order_pdf_url %}
-        {% endif %}
-        <a class="button button-light" href="{{ order_print_url }}" target="_blank" rel="noopener">Imprimer</a>
-        <a class="button button-light" href="{{ order_print_url }}?ticket=1" target="_blank" rel="noopener">Ticket POS</a>
-        <a class="button button-light" href="{{ order_pdf_url }}">PDF</a>
         {% if invoice %}
         <span class="status-badge status-pill blue">Addition {{ invoice.number }} · {{ invoice.balance|money }} à régler</span>
-        {% elif can_compose_order %}
-            {% if order.status == 'OPEN' %}
+        {% if can_collect and invoice.balance > 0 %}<a class="button" href="{% url 'workspaces:payment_create' invoice.pk %}">Encaisser</a>{% endif %}
+        {% elif can_compose_order or can_collect or stay_reservation %}
+            {% if order.status == 'OPEN' and can_compose_order %}
                 {% if bar_order %}{% url 'workspaces:bar_order_edit' order.pk as edit_url %}{% else %}{% url 'workspaces:service_order_edit' order.pk as edit_url %}{% endif %}
                 <a class="button" href="{{ edit_url }}">Modifier la commande</a>
-            {% elif order.status != 'CANCELLED' and order.status != 'PAID' and order_lines %}
+            {% elif order.status == 'SERVED' and order_lines %}
+                {% if can_compose_order %}
                 {% if bar_order %}{% url 'workspaces:bar_request_bill' order.pk as bill_url %}{% else %}{% url 'workspaces:service_request_bill' order.pk as bill_url %}{% endif %}
-                <form method="post" action="{{ bill_url }}">{% csrf_token %}<button class="button" type="submit">Transmettre à la caisse</button></form>
+                <form method="post" action="{{ bill_url }}">{% csrf_token %}<button class="button button-light" type="submit">Transmettre à la caisse</button></form>
+                {% endif %}
+                {% if stay_reservation %}
+                {% if bar_order %}{% url 'workspaces:bar_charge_room' order.pk as charge_url %}{% else %}{% url 'workspaces:service_charge_room' order.pk as charge_url %}{% endif %}
+                <form method="post" action="{{ charge_url }}">{% csrf_token %}<button class="button button-light" type="submit">Imputer chambre {{ stay_reservation.room }}</button></form>
+                {% endif %}
+                {% if can_collect %}
+                {% if bar_order %}{% url 'workspaces:cashier_prepare_bar_invoice' order.pk as pay_url %}{% else %}{% url 'workspaces:cashier_prepare_order_invoice' order.pk as pay_url %}{% endif %}
+                <form method="post" action="{{ pay_url }}">{% csrf_token %}<button class="button" type="submit">Encaisser</button></form>
+                {% endif %}
             {% endif %}
         {% endif %}
     </div>

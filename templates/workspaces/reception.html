@@ -183,37 +183,7 @@
             </article>
         </section>
 
-        <article class="card workspace-panel">
-            <div class="workspace-panel-head">
-                <span class="eyebrow">Planning</span>
-                <h2>14 prochains jours</h2>
-                <p>Occupation prévisionnelle par chambre.</p>
-            </div>
-            <div class="calendar-wrap" tabindex="0" role="region" aria-label="Planning des chambres sur 14 jours">
-                <table class="calendar-table">
-                    <thead>
-                        <tr>
-                            <th class="calendar-room">Chambre</th>
-                            {% for day in calendar_days %}<th class="{% if day == today %}is-today{% endif %}">{{ day|date:"D" }}<span>{{ day|date:"d/m" }}</span></th>{% endfor %}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for row in calendar_rows %}
-                        <tr>
-                            <th class="calendar-room"><a href="{% url 'workspaces:reception_room_detail' row.room.pk %}">{{ row.room.number }}</a></th>
-                            {% for cell in row.cells %}
-                            <td class="{% if cell.is_today %}is-today{% endif %}{% if cell.reservation %} is-booked{% endif %}">
-                                {% if cell.reservation %}
-                                <a href="/module/hotel/reservation/{{ cell.reservation.pk }}/" title="{{ cell.reservation.customer }}">{{ cell.reservation.customer.last_name }}</a>
-                                {% endif %}
-                            </td>
-                            {% endfor %}
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </article>
+        {% include 'workspaces/_planning.html' %}
 
         <article class="card workspace-panel">
             <div class="workspace-panel-head" style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start">

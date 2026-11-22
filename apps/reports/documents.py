@@ -16,7 +16,7 @@ from apps.bar.models import BarOrder, BarOrderItem, Drink
 from apps.core.company import CompanyProfile
 from apps.core.models import AuditLog, Customer
 from apps.finance.models import Expense, Invoice, InvoiceItem, Payment, Refund
-from apps.hotel.models import HousekeepingTask, Reservation
+from apps.hotel.models import HousekeepingTask, Reservation, Room
 from apps.inventory.models import Product, Stock, StockMovement, Supplier
 from apps.obr_ebms.models import (
     EBMSInvoice, EBMSInvoiceItem, EBMSProductMapping, EBMSStockMovement,
@@ -219,6 +219,26 @@ REPORT_CATALOG = {
         'name': 'Mouvements de stock', 'category': 'Inventaire',
         'description': 'Entrées, sorties, ajustements et responsables.', 'roles': MANAGEMENT_ROLES | {'Chef'},
     },
+    'room-occupancy': {
+        'name': "Rapport d'occupation des chambres", 'category': 'Occupation',
+        'description': 'Chambres occupées/disponibles/maintenance et taux d’occupation journalier.', 'roles': MANAGEMENT_ROLES | {'Receptionist'},
+    },
+    'occupancy-rates': {
+        'name': "Taux d'occupation mensuel et annuel", 'category': 'Occupation',
+        'description': 'Taux d’occupation agrégés par mois et par année sur la période.', 'roles': MANAGEMENT_ROLES | {'Receptionist'},
+    },
+    'financial-summary': {
+        'name': 'Rapport financier', 'category': 'Finance',
+        'description': 'Recettes chambres/restaurant/bar, dépenses, résultat et solde de caisse.', 'roles': MANAGEMENT_ROLES | {'Cashier'},
+    },
+    'customer-report': {
+        'name': 'Rapport des clients', 'category': 'Clients',
+        'description': 'Clients, nombre de séjours, fidélité, paiements et dettes.', 'roles': MANAGEMENT_ROLES | {'Receptionist', 'Cashier'},
+    },
+    'restaurant-stock-report': {
+        'name': 'Rapport restaurant et stock', 'category': 'Restaurant & Stock',
+        'description': 'Ventes restaurant/bar, consommations, mouvements de stock et inventaire.', 'roles': MANAGEMENT_ROLES | {'Chef'},
+    },
     'suppliers': {
         'name': 'Fournisseurs', 'category': 'Inventaire',
         'description': 'Contacts, coordonnées et informations fiscales.', 'roles': MANAGEMENT_ROLES,
@@ -412,6 +432,112 @@ def report_data(code, params):
             m.location.name, m.get_movement_type_display(), m.quantity,
             m.reference or '—', str(m.responsible_user),
         ] for m in qs.order_by('-date')]
+
+    elif code == 'room-occupancy':
+        rooms = list(Room.objects.select_related('room_type').order_by('number'))
+        total_rooms = len(rooms)
+        headers = ['Date', 'Chambres occupées', 'Chambres disponibles', 'Maintenance / HS', 'Total chambres', "Taux d'occupation (%)"]
+        rows = []
+        for i in range((end - start).days + 1):
+            day = start + timedelta(days=i)
+            occupied_room_ids = set(
+                Reservation.objects.filter(
+                    status__in=['CONFIRMED', 'CHECKED_IN'], check_in__lte=day, check_out__gt=day,
+                ).values_list('room_id', flat=True)
+            )
+            maintenance = sum(1 for r in rooms if r.operational_status in ('MAINTENANCE', 'OUT_OF_SERVICE'))
+            occupied = sum(1 for r in rooms if r.pk in occupied_room_ids)
+            available = sum(1 for r in rooms if r.pk not in occupied_room_ids and r.operational_status == 'AVAILABLE')
+            rate = (occupied / total_rooms * 100) if total_rooms else 0
+            rows.append([day.strftime('%d/%m/%Y'), occupied, available, maintenance, total_rooms, f'{rate:.1f}'])
+
+    elif code == 'occupancy-rates':
+        rooms = list(Room.objects.select_related('room_type').order_by('number'))
+        total_rooms = len(rooms)
+        headers = ['Période', 'Type', 'Nuits occupées', 'Nuits disponibles', "Taux d'occupation (%)"]
+        rows = []
+        # monthly
+        cur = start.replace(day=1)
+        last_month = end.replace(day=1)
+        while cur <= last_month:
+            nxt = (cur.replace(day=28) + timedelta(days=4)).replace(day=1)
+            m_start = max(cur, start)
+            m_end = min(nxt - timedelta(days=1), end)
+            days = (m_end - m_start).days + 1
+            occ = 0
+            for i in range(days):
+                day = m_start + timedelta(days=i)
+                occ += Reservation.objects.filter(
+                    status__in=['CONFIRMED', 'CHECKED_IN'], check_in__lte=day, check_out__gt=day,
+                ).values('room_id').distinct().count()
+            avail = total_rooms * days
+            rate = (occ / avail * 100) if avail else 0
+            rows.append([cur.strftime('%m/%Y'), 'Mensuel', occ, avail, f'{rate:.1f}'])
+            cur = nxt
+        # yearly
+        for year in range(start.year, end.year + 1):
+            y_start = max(date(year, 1, 1), start)
+            y_end = min(date(year, 12, 31), end)
+            days = (y_end - y_start).days + 1
+            occ = 0
+            for i in range(days):
+                day = y_start + timedelta(days=i)
+                occ += Reservation.objects.filter(
+                    status__in=['CONFIRMED', 'CHECKED_IN'], check_in__lte=day, check_out__gt=day,
+                ).values('room_id').distinct().count()
+            avail = total_rooms * days
+            rate = (occ / avail * 100) if avail else 0
+            rows.append([str(year), 'Annuel', occ, avail, f'{rate:.1f}'])
+
+    elif code == 'financial-summary':
+        room_rev = Reservation.objects.filter(created_at__date__range=(start, end)).exclude(status='CANCELLED').aggregate(t=Sum('estimated_total'))['t'] or ZERO
+        rest_rev = Order.objects.filter(created_at__date__range=(start, end)).exclude(status='CANCELLED').aggregate(t=Sum('total_amount'))['t'] or ZERO
+        bar_rev = BarOrder.objects.filter(created_at__date__range=(start, end)).exclude(status='CANCELLED').aggregate(t=Sum('total_amount'))['t'] or ZERO
+        expenses = Expense.objects.filter(date__range=(start, end)).aggregate(t=Sum('amount'))['t'] or ZERO
+        cash_balance = Payment.objects.filter(paid_at__date__range=(start, end), method__is_cash=True).aggregate(t=Sum('amount'))['t'] or ZERO
+        total_income = room_rev + rest_rev + bar_rev
+        profit = total_income - expenses
+        headers = ['Indicateur', 'Montant (F)']
+        rows = [
+            ['Recettes des chambres', room_rev],
+            ['Recettes du restaurant', rest_rev],
+            ['Recettes du bar', bar_rev],
+            ['Total recettes', total_income],
+            ['Dépenses', expenses],
+            ['Bénéfice / perte', profit],
+            ['Solde de caisse (paiements espèces période)', cash_balance],
+        ]
+
+    elif code == 'customer-report':
+        customers = Customer.objects.filter(is_walk_in=False).order_by('last_name', 'first_name')
+        headers = ['Client', 'Téléphone', 'Email', 'Séjours', 'Fidèle', 'Paiements (F)', 'Dettes / solde dû (F)']
+        rows = []
+        for c in customers:
+            stays = Reservation.objects.filter(customer=c, status__in=['CONFIRMED','CHECKED_IN','CHECKED_OUT']).count()
+            payments = Payment.objects.filter(invoice__customer=c, paid_at__date__range=(start, end)).aggregate(t=Sum('amount'))['t'] or ZERO
+            debt = Invoice.objects.filter(customer=c, status__in=['ISSUED','PARTIAL']).aggregate(t=Sum(F('total_amount') - F('paid_amount')))['t'] or ZERO
+            rows.append([str(c), c.phone or '—', c.email or '—', stays, 'Oui' if stays >= 3 else 'Non', payments, debt])
+
+    elif code == 'restaurant-stock-report':
+        rest_sales = OrderItem.objects.filter(order__created_at__date__range=(start, end), order__status__in=['SERVED','PAID']).annotate(line=ExpressionWrapper(F('quantity')*F('unit_price'), output_field=DecimalField(max_digits=20,decimal_places=4))).values('menu_item__name').annotate(qty=Sum('quantity'), rev=Sum('line')).order_by('-rev')
+        bar_sales = BarOrderItem.objects.filter(order__created_at__date__range=(start, end), order__status__in=['SERVED','PAID']).annotate(line=ExpressionWrapper(F('quantity')*F('unit_price'), output_field=DecimalField(max_digits=20,decimal_places=4))).values('drink__name').annotate(qty=Sum('quantity'), rev=Sum('line')).order_by('-rev')
+        movements = StockMovement.objects.filter(date__date__range=(start, end)).select_related('product','location','responsible_user').order_by('-date')
+        stocks = Stock.objects.select_related('product','location').order_by('product__name')
+        rows = []
+        headers = ['Section', 'Détail', 'Quantité', 'Montant / Valeur', 'Info']
+        rows.append(['VENTES RESTAURANT', f'Total lignes: {rest_sales.count()}', '', '', ''])
+        for r in rest_sales[:100]:
+            rows.append(['Restaurant', r['menu_item__name'], r['qty'], r['rev'] or ZERO, 'Vente plat'])
+        rows.append(['VENTES BAR', f'Total lignes: {bar_sales.count()}', '', '', ''])
+        for r in bar_sales[:100]:
+            rows.append(['Bar', r['drink__name'], r['qty'], r['rev'] or ZERO, 'Vente boisson'])
+        rows.append(['MOUVEMENTS STOCK', f'Total: {movements.count()}', '', '', ''])
+        for m in movements[:150]:
+            rows.append(['Stock', m.product.name, m.quantity, m.get_movement_type_display(), f'{m.location.name} · {timezone.localtime(m.date).strftime("%d/%m/%Y")}'])
+        rows.append(['INVENTAIRE', f'Total: {stocks.count()}', '', '', ''])
+        for s in stocks[:150]:
+            alert = 'Alerte seuil' if s.quantity <= 0 or s.quantity < s.product.minimum_stock else 'OK'
+            rows.append(['Inventaire', s.product.name, s.quantity, s.location.name, alert])
 
     elif code == 'suppliers':
         qs = Supplier.objects.all()

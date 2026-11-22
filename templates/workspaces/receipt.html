@@ -10,7 +10,6 @@
     <div class="workspace-head-actions">
         <a class="button button-light" href="{% url 'workspaces:cashier' %}">Retour à la caisse</a>
         <a class="button button-light" href="/reports/documents/receipt/{{ payment.pk }}/print/" target="_blank" rel="noopener">Version imprimable</a>
-        <a class="button button-light" href="/reports/documents/receipt/{{ payment.pk }}/print/?ticket=1" target="_blank" rel="noopener">Ticket POS</a>
         <a class="button button-light" href="/reports/documents/receipt/{{ payment.pk }}/pdf/">PDF</a>
         <button class="button" type="button" onclick="window.print()">Imprimer</button>
     </div>

@@ -67,9 +67,6 @@
                 <form method="post" action="{% url 'workspaces:service_order_action' order.pk 'start' %}">
                     {% csrf_token %}<button class="button button-small" type="submit">Démarrer</button>
                 </form>
-                <form method="post" action="{% url 'workspaces:service_order_action' order.pk 'cancel' %}">
-                    {% csrf_token %}<button class="button button-small button-light" type="submit">Annuler</button>
-                </form>
             </div>
         </article>
         {% empty %}

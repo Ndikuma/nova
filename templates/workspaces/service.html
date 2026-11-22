@@ -130,10 +130,7 @@
             {% if order.notes %}<p class="order-note">{{ order.notes }}</p>{% endif %}
             <div class="order-card-footer">
                 <div class="order-actions">
-                    <a class="button button-light" href="{% url 'reports:order_print' 'restaurant' order.pk %}?ticket=1" target="_blank" rel="noopener">Ticket commande</a>
-                    {% if order.invoice %}
-                    <a class="button button-light" href="{% url 'reports:invoice_print' order.invoice.pk %}?ticket=1" target="_blank" rel="noopener">Ticket facture</a>
-                    {% endif %}
+
                     {% if order.status == 'OPEN' %}
                         {% if not order.invoice %}
                         <a class="button" href="{% url 'workspaces:service_order_edit' order.pk %}?next=service">Modifier le brouillon</a>
@@ -148,10 +145,21 @@
                     {% endif %}
                     {% if order.invoice %}
                     <span class="status-badge status-pill blue">Addition {{ order.invoice.number }} · {{ order.invoice.balance|money }}</span>
-                    {% elif order.status != 'OPEN' %}
+                    {% if can_collect and order.invoice.balance > 0 %}<a class="button" href="{% url 'workspaces:payment_create' order.invoice.pk %}">Encaisser</a>{% endif %}
+                    {% elif order.status == 'SERVED' %}
                     <form method="post" action="{% url 'workspaces:service_request_bill' order.pk %}">
                         {% csrf_token %}<button class="button button-light" type="submit">Transmettre à la caisse</button>
                     </form>
+                    {% if order.stay_reservation %}
+                    <form method="post" action="{% url 'workspaces:service_charge_room' order.pk %}">
+                        {% csrf_token %}<button class="button button-light" type="submit">Imputer chambre {{ order.stay_reservation.room }}</button>
+                    </form>
+                    {% endif %}
+                    {% if can_collect %}
+                    <form method="post" action="{% url 'workspaces:cashier_prepare_order_invoice' order.pk %}">
+                        {% csrf_token %}<input type="hidden" name="next_url" value="{% url 'workspaces:service' %}#order-{{ order.pk }}"><button class="button" type="submit">Encaisser</button>
+                    </form>
+                    {% endif %}
                     {% endif %}
                     {% if order.status != 'SERVED' and not order.invoice %}
                     <details class="waiter-cancel">
@@ -212,10 +220,7 @@
             {% if order.notes %}<p class="order-note">{{ order.notes }}</p>{% endif %}
             <div class="order-card-footer">
                 <div class="order-actions">
-                    <a class="button button-light" href="{% url 'reports:order_print' 'bar' order.pk %}?ticket=1" target="_blank" rel="noopener">Ticket commande</a>
-                    {% if order.invoice %}
-                    <a class="button button-light" href="{% url 'reports:invoice_print' order.invoice.pk %}?ticket=1" target="_blank" rel="noopener">Ticket facture</a>
-                    {% endif %}
+
                     {% if order.status == 'OPEN' and not order.invoice %}
                     <a class="button" href="{% url 'workspaces:bar_order_edit' order.pk %}?next=service">Modifier le brouillon</a>
                     {% endif %}
@@ -231,10 +236,21 @@
                     {% endif %}
                     {% if order.invoice %}
                     <span class="status-badge status-pill blue">Addition {{ order.invoice.number }} · {{ order.invoice.balance|money }}</span>
-                    {% elif order.status != 'OPEN' %}
+                    {% if can_collect and order.invoice.balance > 0 %}<a class="button" href="{% url 'workspaces:payment_create' order.invoice.pk %}">Encaisser</a>{% endif %}
+                    {% elif order.status == 'SERVED' %}
                     <form method="post" action="{% url 'workspaces:bar_request_bill' order.pk %}">
                         {% csrf_token %}<input type="hidden" name="next" value="service"><button class="button button-light" type="submit">Transmettre à la caisse</button>
                     </form>
+                    {% if order.stay_reservation %}
+                    <form method="post" action="{% url 'workspaces:bar_charge_room' order.pk %}">
+                        {% csrf_token %}<input type="hidden" name="next" value="service"><button class="button button-light" type="submit">Imputer chambre {{ order.stay_reservation.room }}</button>
+                    </form>
+                    {% endif %}
+                    {% if can_collect %}
+                    <form method="post" action="{% url 'workspaces:cashier_prepare_bar_invoice' order.pk %}">
+                        {% csrf_token %}<input type="hidden" name="next_url" value="{% url 'workspaces:service' %}#bar-order-{{ order.pk }}"><button class="button" type="submit">Encaisser</button>
+                    </form>
+                    {% endif %}
                     {% endif %}
                     {% if order.status != 'SERVED' and not order.invoice %}
                     <details class="waiter-cancel">

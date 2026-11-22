@@ -4,10 +4,8 @@
 {% block toolbar_actions %}
 {% if bar_order %}
 <a class="btn" href="{% url 'reports:order_pdf' 'bar' order.pk %}">Télécharger le PDF</a>
-<a class="btn" href="{% url 'reports:order_print' 'bar' order.pk %}?ticket=1">Ticket POS</a>
 {% else %}
 <a class="btn" href="{% url 'reports:order_pdf' 'restaurant' order.pk %}">Télécharger le PDF</a>
-<a class="btn" href="{% url 'reports:order_print' 'restaurant' order.pk %}?ticket=1">Ticket POS</a>
 {% endif %}
 {% endblock %}
 {% block document_footer %}{{ brand.footer }}{% endblock %}

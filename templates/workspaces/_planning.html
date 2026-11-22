@@ -1,0 +1,40 @@
+<article class="card workspace-panel workspace-planning" style="margin-top:18px">
+    <div class="workspace-panel-head" style="display:flex;justify-content:space-between;gap:12px;align-items:flex-end;flex-wrap:wrap">
+        <div>
+            <span class="eyebrow">Planning</span>
+            <h2>{{ planning_month|date:"F Y"|capfirst }}</h2>
+            <p>Occupation prévisionnelle par chambre (mois complet).</p>
+        </div>
+        <div class="desk-row-actions">
+            <a class="button button-small button-light" href="?planning={{ planning_prev|date:'Y-m' }}">Mois précédent</a>
+            <a class="button button-small button-light" href="?planning={{ today|date:'Y-m' }}">Mois en cours</a>
+            <a class="button button-small button-light" href="?planning={{ planning_next|date:'Y-m' }}">Mois suivant</a>
+        </div>
+    </div>
+    <div class="calendar-wrap" tabindex="0" role="region" aria-label="Planning des chambres du mois">
+        <table class="calendar-table">
+            <thead>
+                <tr>
+                    <th class="calendar-room">Chambre</th>
+                    {% for day in calendar_days %}<th class="{% if day == today %}is-today{% endif %}">{{ day|date:"D" }}<span>{{ day|date:"d/m" }}</span></th>{% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in calendar_rows %}
+                <tr>
+                    <th class="calendar-room"><a href="{% url 'workspaces:reception_room_detail' row.room.pk %}">{{ row.room.number }}</a></th>
+                    {% for cell in row.cells %}
+                    <td class="{% if cell.is_today %}is-today{% endif %}{% if cell.reservation %} is-booked{% endif %}">
+                        {% if cell.reservation %}
+                        <a href="/module/hotel/reservation/{{ cell.reservation.pk }}/" title="{{ cell.reservation.customer }}">{{ cell.reservation.customer.last_name }}</a>
+                        {% endif %}
+                    </td>
+                    {% endfor %}
+                </tr>
+                {% empty %}
+                <tr><td colspan="{{ calendar_days|length|add:1 }}" class="overview-empty muted">Aucune chambre configurée.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</article>

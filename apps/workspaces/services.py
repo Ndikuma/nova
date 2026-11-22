@@ -152,8 +152,8 @@ def _invoice_for_sale(order, user, kind, prefix, service, product_field):
     existing = _find_by_marker(kind, order.pk)
     if existing:
         return existing
-    if order.status in ('OPEN', 'CANCELLED', 'PAID'):
-        raise ValueError('Cette commande ne peut pas être facturée à ce stade.')
+    if order.status != 'SERVED':
+        raise ValueError('L’addition ne peut être transmise qu’après le service de la commande.')
 
     items = list(order.items.select_related(product_field).order_by('pk'))
     total = sum((item.subtotal for item in items), ZERO)
@@ -404,6 +404,86 @@ def attach_order_customer(order, customer, user):
         details={'customer': str(customer)},
     )
     return order
+
+
+def active_stay_reservation_for_customer(customer):
+    if not customer or getattr(customer, 'is_walk_in', False):
+        return None
+    return (
+        Reservation.objects.filter(customer=customer, status='CHECKED_IN')
+        .select_related('room')
+        .order_by('-check_in', '-pk')
+        .first()
+    )
+
+
+@transaction.atomic
+def charge_order_to_stay(order, user, *, bar=False):
+    model = BarOrder if bar else Order
+    kind = 'BAR' if bar else 'ORDER'
+    prefix = 'BAR' if bar else 'REST'
+    service_name = 'Bar' if bar else 'Restaurant'
+    product_field = 'drink' if bar else 'menu_item'
+
+    order = model.objects.select_for_update().prefetch_related(f'items__{product_field}').get(pk=order.pk)
+    find_invoice = find_bar_invoice if bar else find_order_invoice
+    if find_invoice(order):
+        raise ValueError('Cette commande est déjà facturée.')
+    if order.status != 'SERVED':
+        raise ValueError('Seule une commande servie peut être imputée à la chambre.')
+
+    reservation = active_stay_reservation_for_customer(order.customer)
+    if not reservation:
+        raise ValueError('Aucun séjour actif trouvé pour ce client.')
+
+    folio = invoice_for_reservation(reservation, user)
+    folio = Invoice.objects.select_for_update().get(pk=folio.pk)
+
+    items = list(order.items.all())
+    total = sum((item.subtotal for item in items), ZERO)
+    if total <= ZERO:
+        raise ValueError('Ajoutez des articles payants avant d’imputer la commande.')
+
+    ref = f'{kind}-{order.pk}'
+    existing_refs = set(folio.items.filter(source_reference=ref).values_list('pk', flat=True))
+    if existing_refs:
+        raise ValueError('Cette commande est déjà imputée à la note de chambre.')
+
+    for item in items:
+        name = getattr(item, product_field).name
+        InvoiceItem.objects.create(
+            invoice=folio,
+            description=f"{name} (ch. {reservation.room})",
+            quantity=item.quantity,
+            unit_price=item.unit_price,
+            tax=ZERO,
+            source_service=service_name,
+            source_reference=ref,
+        )
+
+    folio.total_amount = (folio.total_amount or ZERO) + total
+    if folio.status == 'PAID':
+        folio.status = 'PARTIAL' if folio.balance > ZERO else 'PAID'
+    elif folio.status == 'DRAFT':
+        folio.status = 'ISSUED'
+    folio.save(update_fields=['total_amount', 'status'])
+
+    order.status = 'PAID'
+    if order.total_amount != total:
+        order.total_amount = total
+        order.save(update_fields=['status', 'total_amount'])
+    else:
+        order.save(update_fields=['status'])
+    if bar:
+        _release_bar_table(order)
+    else:
+        _release_restaurant_table(order)
+
+    log_action(
+        user, f'Commande imputée à la chambre {reservation.room}', order,
+        details={'reservation': reservation.pk, 'folio': folio.number, 'total': str(total)},
+    )
+    return folio, reservation
 
 
 # ---------------------------------------------------------------------------

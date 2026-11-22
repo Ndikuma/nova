@@ -34,12 +34,12 @@ from .forms import (
     RestockForm, WaiterOrderForm,
 )
 from .services import (
-    attach_order_customer, bar_transition, check_in_reservation,
-    complete_checkout, find_bar_invoice, find_order_invoice,
-    find_reservation_invoice, invoice_for_bar_order, invoice_for_order,
-    invoice_for_reservation, log_action, prepare_checkout,
-    register_payment, restaurant_transition, signal_restock,
-    update_housekeeping,
+    active_stay_reservation_for_customer, attach_order_customer, bar_transition,
+    charge_order_to_stay, check_in_reservation, complete_checkout,
+    find_bar_invoice, find_order_invoice, find_reservation_invoice,
+    invoice_for_bar_order, invoice_for_order, invoice_for_reservation,
+    log_action, prepare_checkout, register_payment, restaurant_transition,
+    signal_restock, update_housekeeping,
 )
 
 ZERO = Decimal('0')
@@ -59,6 +59,7 @@ WORKSPACE_HOME = {
     'Bartender': 'workspaces:bar',
 }
 ROLE_PRIORITY = ('Superadmin', 'Owner', 'Chef', 'Receptionist', 'Waiter', 'Cashier', 'Bartender')
+COLLECT_ROLES = ('Cashier', 'Owner', 'Receptionist', 'Waiter', 'Bartender', 'Chef')
 
 
 def _groups(user):
@@ -185,8 +186,10 @@ def superadmin_workspace(request):
             'url': '/module/finance/invoice/', 'tone': 'warning',
         })
 
+    today = timezone.localdate()
+    planning = _month_planning(request, today)
     context = {
-        'today': timezone.localdate(),
+        'today': today,
         'users': users[:12],
         'user_total': users.count(),
         'groups': groups,
@@ -211,6 +214,7 @@ def superadmin_workspace(request):
             {'label': 'Administration Django', 'url': '/admin/', 'icon': 'settings'},
             {'label': 'Journal d’audit', 'url': '/module/core/auditlog/', 'icon': 'audit'},
         ],
+        **planning,
     }
     return render(request, 'workspaces/superadmin.html', context)
 
@@ -279,6 +283,7 @@ def owner_workspace(request):
         'invoice', 'method', 'received_by').order_by('-paid_at')[:6]
     recent_expenses = Expense.objects.select_related('category').order_by('-date')[:6]
 
+    planning = _month_planning(request, today)
     context = {
         'today': today,
         'hotel_revenue': hotel_revenue,
@@ -310,8 +315,56 @@ def owner_workspace(request):
             {'label': 'Rapports', 'url': '/reports/', 'icon': 'reports'},
             {'label': 'Stocks & achats', 'url': '/module/inventory/stock/', 'icon': 'inventory'},
         ],
+        **planning,
     }
     return render(request, 'workspaces/owner.html', context)
+
+
+def _month_planning(request, today, rooms=None):
+    raw = request.GET.get('planning', '').strip()
+    try:
+        year_s, month_s = raw.split('-', 1)
+        first = datetime(int(year_s), int(month_s), 1).date()
+    except Exception:
+        first = today.replace(day=1)
+    if first.month == 12:
+        next_month = first.replace(year=first.year + 1, month=1, day=1)
+    else:
+        next_month = first.replace(month=first.month + 1, day=1)
+    prev_month = (first - timedelta(days=1)).replace(day=1)
+    days = []
+    current = first
+    while current < next_month:
+        days.append(current)
+        current += timedelta(days=1)
+    if rooms is None:
+        rooms = list(Room.objects.select_related('room_type').order_by('number'))
+    reservations = (
+        Reservation.objects.select_related('customer', 'room')
+        .exclude(status='CANCELLED')
+        .filter(check_in__lt=next_month, check_out__gt=first)
+    )
+    by_room = {}
+    for reservation in reservations:
+        by_room.setdefault(reservation.room_id, []).append(reservation)
+    rows = []
+    for room in rooms:
+        cells = []
+        for day in days:
+            found = next(
+                (r for r in by_room.get(room.pk, []) if r.check_in <= day < r.check_out),
+                None,
+            )
+            cells.append({'date': day, 'reservation': found, 'is_today': day == today})
+        rows.append({'room': room, 'cells': cells})
+    return {
+        'calendar_days': days,
+        'calendar_rows': rows,
+        'planning_month': first,
+        'planning_prev': prev_month,
+        'planning_next': next_month,
+    }
+
 
 
 # ---------------------------------------------------------------------------
@@ -429,39 +482,14 @@ def reception_workspace(request):
             available_count += 1
         availability_rooms.append({'room': room, 'state': state, 'state_label': label, 'reservation': reservation})
 
-    calendar_days = [today + timedelta(days=offset) for offset in range(14)]
-    calendar_start = calendar_days[0]
-    calendar_end = calendar_days[-1] + timedelta(days=1)
-    calendar_reservations = Reservation.objects.select_related(
-        'customer', 'room'
-    ).exclude(status='CANCELLED').filter(
-        check_in__lt=calendar_end, check_out__gt=calendar_start
-    )
-    reservations_by_room = {}
-    for reservation in calendar_reservations:
-        reservations_by_room.setdefault(reservation.room_id, []).append(reservation)
-    calendar_rows = []
-    for room in rooms:
-        cells = []
-        for day in calendar_days:
-            found = next(
-                (reservation for reservation in reservations_by_room.get(room.pk, [])
-                 if reservation.check_in <= day < reservation.check_out),
-                None,
-            )
-            cells.append({
-                'date': day,
-                'reservation': found,
-                'is_today': day == today,
-            })
-        calendar_rows.append({'room': room, 'cells': cells})
+    planning = _month_planning(request, today, rooms=rooms)
 
     rates = RoomRate.objects.select_related('room_type').filter(active=True).order_by('price')
     pending_requests = BookingRequest.objects.filter(handled_at__isnull=True).select_related('room_type').order_by('created_at', 'pk')
     booking_requests = Paginator(pending_requests, 10).get_page(request.GET.get('demandes'))
     pending_request_count = pending_requests.count()
 
-    can_collect = _has_role(request.user, {'Cashier', 'Owner'})
+    can_collect = _has_role(request.user, COLLECT_ROLES)
     context = {
         'today': today,
         'tomorrow': tomorrow,
@@ -483,8 +511,7 @@ def reception_workspace(request):
         'avail_to': avail_to,
         'availability_rooms': availability_rooms,
         'available_count': available_count,
-        'calendar_days': calendar_days,
-        'calendar_rows': calendar_rows,
+        **planning,
         'rates': rates,
         'booking_requests': booking_requests,
         'pending_request_count': pending_request_count,
@@ -854,6 +881,7 @@ def waiter_workspace(request):
     )
     for order in active_orders:
         order.invoice = find_order_invoice(order)
+        order.stay_reservation = active_stay_reservation_for_customer(order.customer) if not order.invoice else None
     table_orders = {}
     for order in active_orders:
         table_orders.setdefault(order.table_id, []).append(order)
@@ -873,6 +901,7 @@ def waiter_workspace(request):
     )
     for order in bar_active_orders:
         order.invoice = find_bar_invoice(order)
+        order.stay_reservation = active_stay_reservation_for_customer(order.customer) if not order.invoice else None
     bar_table_orders = {}
     for order in bar_active_orders:
         if order.table_id and order.table_id not in bar_table_orders:
@@ -1114,6 +1143,7 @@ def bartender_workspace(request):
     )
     for order in active_orders:
         order.invoice = find_bar_invoice(order)
+        order.stay_reservation = active_stay_reservation_for_customer(order.customer) if not order.invoice else None
     table_orders = {}
     for order in active_orders:
         if order.table_id and order.table_id not in table_orders:
@@ -1147,6 +1177,7 @@ def bartender_workspace(request):
         'customers': Customer.objects.filter(is_walk_in=False),
         'attach_form': AttachCustomerForm(),
         'restock_form': RestockForm(),
+        'can_collect': _has_role(request.user, COLLECT_ROLES),
     }
     return render(request, 'workspaces/bar.html', context)
 
@@ -1296,7 +1327,7 @@ def reception_room_detail(request, pk):
     )
     active_housekeeping = [task for task in housekeeping if task.status in ('PENDING', 'IN_PROGRESS')]
 
-    can_collect = _has_role(request.user, {'Cashier', 'Owner'})
+    can_collect = _has_role(request.user, COLLECT_ROLES)
     state = 'available'
     if room.operational_status == 'MAINTENANCE':
         state = 'maintenance'
@@ -1335,6 +1366,7 @@ def bar_table_detail(request, pk):
     )
     for order in active_orders:
         order.invoice = find_bar_invoice(order)
+        order.stay_reservation = active_stay_reservation_for_customer(order.customer) if not order.invoice else None
     unpaid_orders = [o for o in active_orders if o.invoice and o.invoice.balance > 0]
     unbilled_orders = [o for o in active_orders if not o.invoice]
     recent_orders = list(
@@ -1345,7 +1377,7 @@ def bar_table_detail(request, pk):
     )
     for order in recent_orders:
         order.invoice = find_bar_invoice(order)
-    can_collect = _has_role(request.user, {'Cashier', 'Owner'})
+    can_collect = _has_role(request.user, COLLECT_ROLES)
     context = {
         'table': table,
         'active_orders': active_orders,
@@ -1369,6 +1401,7 @@ def service_table_detail(request, pk):
     )
     for order in active_orders:
         order.invoice = find_order_invoice(order)
+        order.stay_reservation = active_stay_reservation_for_customer(order.customer) if not order.invoice else None
     unpaid_orders = [o for o in active_orders if o.invoice and o.invoice.balance > 0]
     unbilled_orders = [o for o in active_orders if not o.invoice]
     recent_orders = list(
@@ -1379,7 +1412,7 @@ def service_table_detail(request, pk):
     )
     for order in recent_orders:
         order.invoice = find_order_invoice(order)
-    can_collect = _has_role(request.user, {'Cashier', 'Owner'})
+    can_collect = _has_role(request.user, COLLECT_ROLES)
     context = {
         'table': table,
         'active_orders': active_orders,
@@ -1390,6 +1423,60 @@ def service_table_detail(request, pk):
     }
     return render(request, 'workspaces/restaurant_table_detail.html', context)
 
+
+@role_required('Waiter', 'Receptionist', 'Owner')
+def service_charge_room(request, pk):
+    order = get_object_or_404(Order, pk=pk)
+    if request.method != 'POST':
+        return redirect('workspaces:service')
+    try:
+        folio, reservation = charge_order_to_stay(order, request.user, bar=False)
+    except ValueError as exc:
+        messages.error(request, str(exc))
+    else:
+        messages.success(
+            request,
+            f'Commande #{order.pk} imputée à la chambre {reservation.room} (note {folio.number}).',
+        )
+    next_url = request.POST.get('next')
+    if next_url == 'table' and order.table_id:
+        return redirect('workspaces:service_table_detail', pk=order.table_id)
+    return redirect('workspaces:service')
+
+
+@role_required('Bartender', 'Waiter', 'Owner')
+def bar_charge_room(request, pk):
+    order = get_object_or_404(BarOrder, pk=pk)
+    next_ws = request.POST.get('next')
+    dest = f'workspaces:{next_ws}' if next_ws in ('service', 'bar') else 'workspaces:bar'
+    if request.method != 'POST':
+        return redirect(dest)
+    try:
+        folio, reservation = charge_order_to_stay(order, request.user, bar=True)
+    except ValueError as exc:
+        messages.error(request, str(exc))
+    else:
+        messages.success(
+            request,
+            f'Commande bar #{order.pk} imputée à la chambre {reservation.room} (note {folio.number}).',
+        )
+    if next_ws == 'table' and order.table_id:
+        return redirect('workspaces:bar_table_detail', pk=order.table_id)
+    return redirect(dest)
+
+
+def _collect_fallback_url(request):
+    ref = request.META.get('HTTP_REFERER')
+    if ref:
+        return ref
+    roles = set(user_roles(request.user))
+    if request.user.is_superuser or 'Owner' in roles or 'Cashier' in roles:
+        return reverse('workspaces:cashier')
+    if 'Bartender' in roles:
+        return reverse('workspaces:bar')
+    if 'Receptionist' in roles:
+        return reverse('workspaces:reception')
+    return reverse('workspaces:service')
 
 # ---------------------------------------------------------------------------
 # Cashier — financial operations
@@ -1461,15 +1548,15 @@ def cashier_workspace(request):
     return render(request, 'workspaces/cashier.html', context)
 
 
-@role_required('Cashier', 'Owner')
+@role_required(*COLLECT_ROLES)
 def payment_create(request, pk):
     invoice = get_object_or_404(Invoice, pk=pk)
     if invoice.balance <= ZERO:
         messages.info(request, 'Cette facture est déjà soldée.')
-        return redirect('workspaces:cashier')
+        return redirect(_collect_fallback_url(request))
     if not invoice.is_payable:
         messages.error(request, 'Seule une facture émise ou partiellement payée peut être encaissée.')
-        return redirect('workspaces:cashier')
+        return redirect(_collect_fallback_url(request))
     initial = {'amount': invoice.balance}
     default_method = PaymentMethod.objects.filter(active=True).order_by('name').first()
     if default_method:
@@ -1504,37 +1591,43 @@ def payment_receipt(request, pk):
         Payment.objects.select_related('invoice', 'invoice__customer', 'method', 'received_by'),
         pk=pk,
     )
-    return render(request, 'workspaces/receipt.html', {'payment': payment})
+    back_url = _collect_fallback_url(request)
+    can_access_cashier = _has_role(request.user, {'Cashier', 'Owner'})
+    return render(request, 'workspaces/receipt.html', {
+        'payment': payment,
+        'back_url': back_url,
+        'can_access_cashier': can_access_cashier,
+    })
 
 
-@role_required('Cashier', 'Owner')
+@role_required(*COLLECT_ROLES)
 def cashier_prepare_order_invoice(request, pk):
     order = get_object_or_404(Order, pk=pk)
+    dest = request.POST.get('next_url') or request.META.get('HTTP_REFERER') or reverse('workspaces:cashier')
     if request.method != 'POST':
-        return redirect('workspaces:cashier')
+        return redirect(dest)
     try:
         invoice = invoice_for_order(order, request.user)
     except ValueError as exc:
         messages.error(request, str(exc))
-    else:
-        messages.success(request, f'Facture {invoice.number} préparée.')
-        return redirect('workspaces:payment_create', pk=invoice.pk)
-    return redirect('workspaces:cashier')
+        return redirect(dest)
+    messages.success(request, f'Facture {invoice.number} préparée.')
+    return redirect('workspaces:payment_create', pk=invoice.pk)
 
 
-@role_required('Cashier', 'Owner')
+@role_required(*COLLECT_ROLES)
 def cashier_prepare_bar_invoice(request, pk):
     order = get_object_or_404(BarOrder, pk=pk)
+    dest = request.POST.get('next_url') or request.META.get('HTTP_REFERER') or reverse('workspaces:cashier')
     if request.method != 'POST':
-        return redirect('workspaces:cashier')
+        return redirect(dest)
     try:
         invoice = invoice_for_bar_order(order, request.user)
     except ValueError as exc:
         messages.error(request, str(exc))
-    else:
-        messages.success(request, f'Facture {invoice.number} préparée.')
-        return redirect('workspaces:payment_create', pk=invoice.pk)
-    return redirect('workspaces:cashier')
+        return redirect(dest)
+    messages.success(request, f'Facture {invoice.number} préparée.')
+    return redirect('workspaces:payment_create', pk=invoice.pk)
 
 
 # ---------------------------------------------------------------------------

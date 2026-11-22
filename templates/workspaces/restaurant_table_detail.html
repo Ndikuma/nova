@@ -32,7 +32,6 @@
                 <div class="desk-row-actions">
                     <span class="{{ order.invoice.status|badge_class }}">{{ order.invoice.get_status_display }}</span>
                     <a class="button button-small button-light" href="{% url 'reports:invoice_print' order.invoice.pk %}" target="_blank" rel="noopener">Facture</a>
-                    <a class="button button-small button-light" href="{% url 'reports:invoice_print' order.invoice.pk %}?ticket=1" target="_blank" rel="noopener">Ticket facture</a>
                     {% if can_collect %}<a class="button button-small" href="{% url 'workspaces:payment_create' order.invoice.pk %}">Encaisser</a>{% endif %}
                 </div>
             </div>
@@ -54,10 +53,14 @@
                     <strong>Commande #{{ order.pk }}</strong>
                     <small>{{ order.customer|default:"Client de passage" }} · {{ order.items.count }} article(s) · {{ order.total_amount|money }}</small>
                 </div>
-                <div class="desk-row-actions">
+                <div class="desk-row-actions" style="flex-wrap:wrap">
                     <span class="{{ order.status|badge_class }}">{{ order.get_status_display }}</span>
                     <a class="button button-small button-light" href="{% url 'reports:order_print' 'restaurant' order.pk %}" target="_blank" rel="noopener">Commande</a>
-                    <a class="button button-small button-light" href="{% url 'reports:order_print' 'restaurant' order.pk %}?ticket=1" target="_blank" rel="noopener">Ticket commande</a>
+                    {% if order.status == 'SERVED' %}
+                    <form method="post" action="{% url 'workspaces:service_request_bill' order.pk %}" style="margin:0">{% csrf_token %}<button class="button button-small button-light" type="submit">À la caisse</button></form>
+                    {% if order.stay_reservation %}<form method="post" action="{% url 'workspaces:service_charge_room' order.pk %}" style="margin:0">{% csrf_token %}<input type="hidden" name="next" value="table"><button class="button button-small button-light" type="submit">Chambre {{ order.stay_reservation.room }}</button></form>{% endif %}
+                    {% if can_collect %}<form method="post" action="{% url 'workspaces:cashier_prepare_order_invoice' order.pk %}" style="margin:0">{% csrf_token %}<input type="hidden" name="next_url" value="{% url 'workspaces:service_table_detail' table.pk %}"><button class="button button-small" type="submit">Encaisser</button></form>{% endif %}
+                    {% endif %}
                 </div>
             </div>
             {% empty %}
@@ -94,13 +97,16 @@
                 {% if order.invoice %}
                 <span class="status-badge status-pill blue">Facture {{ order.invoice.number }} · solde {{ order.invoice.balance|money }} · {{ order.invoice.get_status_display }}</span>
                 <a class="button button-small button-light" href="{% url 'reports:invoice_print' order.invoice.pk %}" target="_blank" rel="noopener">Facture</a>
-                <a class="button button-small button-light" href="{% url 'reports:invoice_print' order.invoice.pk %}?ticket=1" target="_blank" rel="noopener">Ticket facture</a>
                 {% if can_collect and order.invoice.balance > 0 %}<a class="button button-small" href="{% url 'workspaces:payment_create' order.invoice.pk %}">Encaisser</a>{% endif %}
                 {% else %}
                 <span class="muted">Facture non transmise</span>
+                {% if order.status == 'SERVED' %}
+                <form method="post" action="{% url 'workspaces:service_request_bill' order.pk %}" style="margin:0">{% csrf_token %}<button class="button button-small button-light" type="submit">À la caisse</button></form>
+                {% if order.stay_reservation %}<form method="post" action="{% url 'workspaces:service_charge_room' order.pk %}" style="margin:0">{% csrf_token %}<input type="hidden" name="next" value="table"><button class="button button-small button-light" type="submit">Chambre {{ order.stay_reservation.room }}</button></form>{% endif %}
+                {% if can_collect %}<form method="post" action="{% url 'workspaces:cashier_prepare_order_invoice' order.pk %}" style="margin:0">{% csrf_token %}<input type="hidden" name="next_url" value="{% url 'workspaces:service_table_detail' table.pk %}"><button class="button button-small" type="submit">Encaisser</button></form>{% endif %}
+                {% endif %}
                 {% endif %}
                 <a class="button button-small button-light" href="{% url 'reports:order_print' 'restaurant' order.pk %}" target="_blank" rel="noopener">Commande</a>
-                <a class="button button-small button-light" href="{% url 'reports:order_print' 'restaurant' order.pk %}?ticket=1" target="_blank" rel="noopener">Ticket commande</a>
             </div>
         </article>
         {% empty %}

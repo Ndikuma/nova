@@ -93,7 +93,6 @@
                                 {% if order.invoice %}
                                 <a class="button button-small" href="{% url 'workspaces:payment_create' order.invoice.pk %}">Encaisser</a>
                                 <a class="button button-small button-light" href="{% url 'reports:invoice_print' order.invoice.pk %}" target="_blank" rel="noopener">Facture</a>
-                                <a class="button button-small button-light" href="{% url 'reports:invoice_print' order.invoice.pk %}?ticket=1" target="_blank" rel="noopener">Ticket facture</a>
                                 {% else %}
                                 {% if order.kind == 'bar' %}
                                 <form method="post" action="{% url 'workspaces:cashier_prepare_bar_invoice' order.pk %}">{% csrf_token %}<button class="button button-small" type="submit">Préparer facture</button></form>
@@ -102,7 +101,6 @@
                                 {% endif %}
                                 {% endif %}
                                 <a class="button button-small button-light" href="{% url 'reports:order_print' order.kind order.pk %}" target="_blank" rel="noopener">Commande</a>
-                                <a class="button button-small button-light" href="{% url 'reports:order_print' order.kind order.pk %}?ticket=1" target="_blank" rel="noopener">Ticket commande</a>
                             </td>
                         </tr>
                         {% empty %}
@@ -184,7 +182,6 @@
                             <td>{{ payment.paid_at|date:"d/m H:i" }}</td>
                             <td class="desk-row-actions">
                                 <a class="button button-small button-light" href="{% url 'workspaces:payment_receipt' payment.pk %}">Reçu</a>
-                                <a class="button button-small button-light" href="{% url 'reports:receipt_print' payment.pk %}?ticket=1" target="_blank" rel="noopener">Ticket reçu</a>
                                 <a class="button button-small button-light" href="/reports/documents/receipt/{{ payment.pk }}/pdf/">PDF</a>
                             </td>
                         </tr>

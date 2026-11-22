@@ -3,7 +3,6 @@
 {% block toolbar_title %}Facture {{ invoice.number }}{% endblock %}
 {% block toolbar_actions %}
 <a class="btn" href="{% url 'reports:invoice_pdf' invoice.pk %}">Télécharger le PDF</a>
-<a class="btn" href="{% url 'reports:invoice_print' invoice.pk %}?ticket=1">Ticket POS</a>
 {% endblock %}
 {% block document_footer %}{{ brand.invoice_footer }}{% endblock %}
 {% block doc_meta %}

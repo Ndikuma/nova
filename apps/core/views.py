@@ -24,7 +24,7 @@ from apps.inventory.models import (Product, PurchaseOrder, PurchaseOrderItem, Re
                                     RecipeIngredient, Stock, StockMovement, Supplier)
 from apps.inventory.services import move_stock
 from apps.restaurant.models import Menu, MenuItem, Order, OrderItem, RestaurantReservation, Table
-from apps.workspaces.services import find_bar_invoice, find_order_invoice, find_reservation_invoice, register_payment
+from apps.workspaces.services import active_stay_reservation_for_customer, find_bar_invoice, find_order_invoice, find_reservation_invoice, register_payment
 from apps.workspaces.views import workspace_home as _workspace_home
 from apps.core.models import AuditLog, Customer
 
@@ -954,11 +954,19 @@ def entity_detail(request, module, entity, pk):
     obj = get_object_or_404(model, pk=pk)
     if model in ORDER_EDITORS:
         bar = model is BarOrder
+        invoice = find_bar_invoice(obj) if bar else find_order_invoice(obj)
+        roles = set(user_roles(request.user))
+        can_collect = request.user.is_superuser or bool({'Cashier', 'Owner', 'Receptionist', 'Waiter', 'Bartender', 'Chef'} & roles)
+        stay_reservation = None
+        if not invoice and obj.status == 'SERVED' and obj.customer_id:
+            stay_reservation = active_stay_reservation_for_customer(obj.customer)
         return render(request, 'workspaces/order_detail.html', {
             'order': obj, 'bar_order': bar, 'module': module, 'entity': entity,
             'order_lines': obj.items.select_related('drink' if bar else 'menu_item'),
-            'invoice': find_bar_invoice(obj) if bar else find_order_invoice(obj),
+            'invoice': invoice,
             'can_compose_order': _can_compose_order(request.user, model),
+            'can_collect': can_collect,
+            'stay_reservation': stay_reservation,
         })
     fields = _visible_fields(model)
     cells = _record_cells(obj, fields)
@@ -971,7 +979,7 @@ def entity_detail(request, module, entity, pk):
     source_booking_requests = None
     if isinstance(obj, Invoice):
         can_collect_payment = obj.is_payable and (
-            request.user.is_superuser or bool({'Cashier', 'Owner'} & set(user_roles(request.user)))
+            request.user.is_superuser or bool({'Cashier', 'Owner', 'Receptionist', 'Waiter', 'Bartender', 'Chef'} & set(user_roles(request.user)))
         )
         related_payments = obj.payments.select_related('method', 'received_by').order_by('-paid_at')
         invoice_source = (obj.notes or '').splitlines()[0] if obj.notes else ''
@@ -1059,7 +1067,7 @@ def entity_detail(request, module, entity, pk):
 def _reservation_actions(request, reservation):
     roles = set(user_roles(request.user))
     can_manage = request.user.is_superuser or bool({'Receptionist', 'Owner'} & roles)
-    can_collect = request.user.is_superuser or bool({'Cashier', 'Owner'} & roles)
+    can_collect = request.user.is_superuser or bool({'Cashier', 'Owner', 'Receptionist', 'Waiter', 'Bartender', 'Chef'} & roles)
     invoice = find_reservation_invoice(reservation)
     stay = Stay.objects.filter(reservation=reservation).order_by('-actual_check_in', '-pk').first()
     has_unpaid = bool(invoice and invoice.balance > 0)
